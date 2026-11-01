@@ -1,0 +1,71 @@
+// Duet Canvas prompts — things to draw together on one shared canvas.
+// Grouped by vibe; the game leans towards tonight's vibe and mixes in a few from the others.
+
+export const PROMPTS = {
+  sweet: [
+    'Our dream home',
+    'The pet we would adopt tonight',
+    'A picnic for two',
+    'Our perfect lazy Sunday',
+    'A blanket fort big enough for both of us',
+    'A garden we would grow together',
+    'A treehouse just for us',
+    'The coziest cabin in the snow',
+    'A rainy day inside together',
+    'Our tiny café and its menu board',
+    'Our happy place',
+    'A cake for our anniversary',
+    'The best breakfast we could make together',
+    'Our dream road-trip van',
+  ],
+  silly: [
+    'The monster that lives under our bed',
+    'Us as superheroes, with costumes',
+    'The album cover for our band',
+    'A brand-new animal: half cat, half anything',
+    'The world’s most ridiculous haircut',
+    'Us as a pair of mismatched socks',
+    'A sandwich tower as tall as the canvas',
+    'Aliens crashing our date night',
+    'A robot that does all our chores',
+    'Us, but as vegetables',
+    'The silliest hat ever invented',
+    'A dinosaur on its very first date',
+    'Our couple mascot',
+    'A fancy portrait of our pet rock',
+  ],
+  flirty: [
+    'A candlelit dinner for two',
+    'The moment we first met',
+    'Our first kiss, as a cartoon',
+    'A date night under the stars',
+    'Us slow-dancing in the kitchen',
+    'A secret note in a bottle',
+    'The outfit that makes you swoon',
+    'A bouquet for no reason at all',
+    'Our dream honeymoon spot',
+    'A heart-shaped hot air balloon',
+    'Breakfast in bed, deluxe edition',
+    'Our next date, planned in pictures',
+  ],
+  deep: [
+    'A bridge between our two cities',
+    'The moon we both look at',
+    'What we will do the minute we meet again',
+    'Two windows under the same sky',
+    'A map of our favourite places',
+    'Our time zones as two clocks holding hands',
+    'A care package for each other',
+    'The future we are saving up for',
+    'Our life ten years from now',
+    'A paper plane carrying a message across the ocean',
+    'A tin-can telephone stretched between our homes',
+    'A star with our names on it',
+    'The airport arrivals gate, the good day',
+    'Everything that reminds me of you',
+  ],
+};
+
+export const VIBE_ORDER = ['sweet', 'silly', 'flirty', 'deep'];
+
+export const ALL_PROMPTS = VIBE_ORDER.flatMap((v) => PROMPTS[v]);

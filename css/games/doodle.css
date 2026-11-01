@@ -1,1 +1,279 @@
-/* doodle styles */
+/* ==========================================================================
+   Doodle Dash
+   ========================================================================== */
+.game.doodle .round {
+  gap: 12px;
+}
+/* Board + toolbar fit above the reaction bar on a phone (≈404px of other UI around a 4:3 board). */
+.game.doodle .drawboard,
+.game.doodle .word-bar,
+.game.doodle .guesses,
+.game.doodle .round > .answer-box {
+  width: min(100%, 640px, max(260px, calc((100dvh - 404px) * 4 / 3)));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.game.doodle .choose .options {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+}
+.game.doodle .option {
+  min-height: 62px;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 1.2rem;
+  padding: 12px 16px;
+}
+.game.doodle .option b {
+  font-weight: 900;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.game.doodle .tag {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #1d1640;
+}
+.game.doodle .tag-0 {
+  background: var(--mint);
+}
+.game.doodle .tag-1 {
+  background: var(--blue);
+}
+.game.doodle .tag-2 {
+  background: var(--pink);
+}
+.game.doodle .role-badge {
+  display: inline-block;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--gold), var(--pink));
+  color: #1d1640;
+  font-weight: 900;
+  font-size: 1.1rem;
+  box-shadow: 0 6px 20px rgba(255, 126, 182, 0.3);
+}
+.game.doodle .choose p {
+  margin: 0;
+}
+.game.doodle .waiting-card h3 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+.game.doodle .waiting-card p {
+  margin: 0;
+  max-width: 340px;
+}
+
+/* word / hint bar above the board */
+.game.doodle .word-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.game.doodle .word-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.game.doodle .word-info small {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+.game.doodle .secret-word {
+  font-size: 1.45rem;
+  font-weight: 900;
+  color: var(--gold);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.game.doodle .hint {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 14px;
+  row-gap: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--mint);
+  line-height: 1.3;
+}
+.game.doodle .hint-word {
+  white-space: pre;
+}
+.game.doodle .hint-wait {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+.game.doodle .word-bar .timer {
+  flex: none;
+  width: 92px;
+}
+
+/* live guesses */
+.game.doodle .guesses {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.game.doodle .guesses-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.game.doodle .guesses-head small:first-child {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+.game.doodle .bubbles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.game.doodle .bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 6px 12px;
+  border-radius: 16px 16px 16px 4px;
+  background: #fffaf3;
+  color: #2a2148;
+  font-weight: 800;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+.game.doodle .bubble.close {
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(255, 212, 121, 0.35);
+}
+.game.doodle .bubble em {
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8a4b00;
+}
+.game.doodle .empty-guesses {
+  margin: 0;
+}
+.game.doodle .skip-btn {
+  align-self: center;
+}
+.game.doodle .skip-btn.armed {
+  background: rgba(255, 107, 129, 0.2);
+  border-color: var(--danger);
+  color: #fff;
+}
+.game.doodle .round > .answer-box {
+  max-width: none;
+}
+
+/* round result */
+.game.doodle .round-result {
+  margin: 0 auto;
+  gap: 6px;
+}
+.game.doodle .result-word {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--gold);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.game.doodle .pts-chip {
+  border-color: rgba(255, 212, 121, 0.6);
+  background: rgba(255, 212, 121, 0.16);
+}
+.game.doodle .next-bar {
+  gap: 8px;
+}
+.game.doodle .next-bar p {
+  margin: 0;
+}
+.game.doodle .next-bar .auto {
+  margin-left: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 0.8rem;
+}
+
+/* final */
+.game.doodle .final .big small {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.game.doodle .gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+}
+.game.doodle .gallery-item {
+  margin: 0;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.game.doodle .gallery-item.ok {
+  border-color: rgba(126, 240, 196, 0.45);
+}
+.game.doodle .gallery-item img,
+.game.doodle .thumb-empty {
+  aspect-ratio: 4 / 3;
+}
+.game.doodle .thumb-empty {
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 1.6rem;
+}
+.game.doodle .gallery-item figcaption {
+  display: flex;
+  flex-direction: column;
+  padding: 0 4px 2px;
+  text-align: left;
+  min-width: 0;
+}
+.game.doodle .gallery-item figcaption b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game.doodle .gallery-item.ok small {
+  color: var(--mint);
+}
+.game.doodle .gallery-item.miss small {
+  color: var(--muted);
+}

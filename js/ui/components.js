@@ -13,7 +13,7 @@ export function GameHeader({ meta, round, total, api, children }) {
   return html`<div class="game-header">
     <div class="game-title"><span class="game-emoji">${meta.emoji}</span> ${meta.title}</div>
     <div class="game-meta">
-      ${round != null && html`<span class="chip">Round ${round}${total ? ` / ${total}` : ''}</span>`}
+      ${round != null && html`<span class="chip"><span class="hide-narrow">Round </span>${round}${total ? ` / ${total}` : ''}</span>`}
       ${children}
       <button class="btn btn-ghost btn-sm" onClick=${() => api.confirmEnd()} aria-label="Back to games">✕</button>
     </div>

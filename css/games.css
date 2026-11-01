@@ -1,3 +1,4 @@
+@import url('./canvas.css');
 /* Per-game styles. Each game owns exactly one file below. */
 @import url('./games/insync.css');
 @import url('./games/knowme.css');

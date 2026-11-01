@@ -1,1 +1,118 @@
-/* duet styles */
+/* Duet Canvas. The shared .drawboard styles live in css/games/doodle.css. */
+.game.duet {
+  gap: 14px;
+}
+.game.duet .duet-board,
+.game.duet .duet-prompt,
+.game.duet .duet-banner {
+  /* 4:3 board + toolbar fit above the reaction bar on a phone (≈410px of other UI). */
+  width: min(100%, 640px, max(260px, calc((100dvh - 410px) * 4 / 3)));
+  margin: 0 auto;
+}
+
+.game.duet .duet-prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px 12px 16px;
+  text-align: left;
+  font-size: 1.12rem;
+  line-height: 1.25;
+}
+.game.duet .prompt-text {
+  flex: 1;
+  min-width: 0;
+}
+.game.duet .prompt-text small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+.game.duet .prompt-text span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.game.duet .shuffle {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 1.2rem;
+}
+
+.game.duet .duet-finish {
+  gap: 10px;
+}
+.game.duet .duet-finish p {
+  margin: 0;
+}
+.game.duet .nudge-note {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 212, 121, 0.15);
+  border: 1px solid rgba(255, 212, 121, 0.5);
+  color: var(--gold);
+  font-weight: 800;
+}
+.game.duet .glow-pulse {
+  animation: duet-glow 1.6s ease-in-out infinite;
+}
+@keyframes duet-glow {
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(255, 212, 121, 0.45),
+      0 6px 26px rgba(255, 79, 154, 0.55);
+  }
+}
+
+/* Finished: the canvas gets a little gallery frame. */
+.game.duet .duet-board.framed {
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f2d49b, #c99a5b 55%, #e9c58a);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.35),
+    0 18px 40px rgba(0, 0, 0, 0.5);
+  animation: pop-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+.game.duet .duet-board.framed .board-wrap {
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.game.duet .duet-banner {
+  gap: 6px;
+}
+.game.duet .duet-banner h2 {
+  margin: 0;
+}
+.game.duet .pts-chip {
+  border-color: rgba(255, 212, 121, 0.6);
+  background: rgba(255, 212, 121, 0.16);
+}
+.game.duet .duet-gallery {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.game.duet .duet-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.game.duet .duet-thumbs .thumb-btn {
+  width: 88px;
+}
+.game.duet .duet-thumbs img {
+  aspect-ratio: 4 / 3;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}

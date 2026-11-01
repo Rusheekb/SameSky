@@ -1,0 +1,10 @@
+# Supabase CLI config for Same Sky. The game itself only uses Realtime broadcast channels (no
+# tables, no auth), so the only thing configured here is the optional AI Edge Function.
+project_id = "same-sky"
+
+[functions.same-sky-ai]
+enabled = true
+# The browser may call the function with a new-style publishable key (sb_publishable_...), which
+# is not a JWT, so the gateway must not verify JWTs. The function does its own auth: every request
+# needs the APP_PASSCODE secret in the x-same-sky-passcode header (see functions/same-sky-ai).
+verify_jwt = false

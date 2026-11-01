@@ -40,7 +40,7 @@ export async function aiGenerate(config, task, params = {}, { timeoutMs = 45000 
         'Content-Type': 'application/json',
         apikey: config.supabaseAnonKey,
         Authorization: `Bearer ${config.supabaseAnonKey}`,
-        'x-same-sky-passcode': getPasscode(),
+        'x-same-sky-passcode': encodeURIComponent(getPasscode()),
       },
       body: JSON.stringify({ task, params }),
     });

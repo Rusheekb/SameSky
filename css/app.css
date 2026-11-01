@@ -1163,6 +1163,12 @@ fieldset {
   margin: 0.15em 0;
 }
 
+@media (max-width: 420px) {
+  .hide-narrow {
+    display: none;
+  }
+}
+
 @media (max-width: 380px) {
   .react-btn {
     width: 38px;

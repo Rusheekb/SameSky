@@ -1,1 +1,380 @@
-/* thisorthat styles */
+/* This or That */
+.game.thisorthat .tot-meta {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(255, 126, 182, 0.45);
+}
+.game.thisorthat .tot-meta > span {
+  padding: 5px 10px;
+}
+.game.thisorthat .tot-round {
+  border-right: 1px solid rgba(255, 126, 182, 0.35);
+}
+.game.thisorthat .tot-pts {
+  background: rgba(255, 126, 182, 0.14);
+}
+
+/* ---- pick ---- */
+.game.thisorthat .tot-pick {
+  gap: 16px;
+}
+.game.thisorthat .tot-hint {
+  margin: 0;
+  min-height: 1.4em;
+}
+.game.thisorthat .tot-hot {
+  color: var(--gold);
+}
+.game.thisorthat .tot-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.game.thisorthat .tot-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  min-width: 0;
+}
+.game.thisorthat .tot-label b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game.thisorthat .tot-check {
+  color: var(--mint);
+  font-weight: 900;
+  animation: pop-in 0.3s ease both;
+}
+.game.thisorthat .tot-opts {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.game.thisorthat .tot-opt {
+  appearance: none;
+  position: relative;
+  font: inherit;
+  color: var(--text);
+  min-height: 92px;
+  padding: 14px 14px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.03));
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  word-break: break-word;
+  transition:
+    transform 0.14s ease,
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.game.thisorthat .tot-opt:active {
+  transform: scale(0.96);
+}
+.game.thisorthat .tot-opt:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+.game.thisorthat .tot-opts.mine .tot-opt.sel {
+  border-color: var(--pink);
+  background: linear-gradient(160deg, rgba(255, 126, 182, 0.32), rgba(255, 79, 154, 0.14));
+  box-shadow: var(--glow);
+}
+.game.thisorthat .tot-opts.guess .tot-opt.sel {
+  border-color: var(--blue);
+  background: linear-gradient(160deg, rgba(110, 200, 255, 0.3), rgba(110, 200, 255, 0.1));
+  box-shadow:
+    0 0 0 1px rgba(110, 200, 255, 0.45),
+    0 0 26px rgba(110, 200, 255, 0.22);
+}
+.game.thisorthat .tot-tick {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  font-style: normal;
+  font-size: 0.85rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--pink-2);
+  color: #fff;
+  animation: pop-in 0.3s ease both;
+}
+.game.thisorthat .tot-opts.guess .tot-tick {
+  background: #2f9be0;
+}
+.game.thisorthat .tot-or {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* ---- locked ---- */
+.game.thisorthat .tot-locked {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+.game.thisorthat .tot-locked-title {
+  margin: 0;
+  font-weight: 900;
+  font-size: 1.15rem;
+}
+.game.thisorthat .tot-locked-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.game.thisorthat .tot-locked-row small {
+  color: var(--muted);
+}
+.game.thisorthat .tot-locked-row b {
+  font-size: 1.15rem;
+}
+
+/* ---- reveal ---- */
+.game.thisorthat .tot-dilemma {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.game.thisorthat .tot-dilemma i {
+  font-style: normal;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.8;
+}
+.game.thisorthat .tot-rcard {
+  padding: 14px 10px;
+}
+.game.thisorthat .tot-rcard b {
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+.game.thisorthat .tot-rcard.same {
+  border-color: rgba(255, 126, 182, 0.6);
+  box-shadow: var(--glow);
+}
+.game.thisorthat .tot-headline {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.game.thisorthat .tot-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.game.thisorthat .tot-checks li {
+  display: flex;
+  flex-direction: column;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.18);
+  border-left: 4px solid var(--muted);
+}
+.game.thisorthat .tot-checks li.ok {
+  border-left-color: var(--mint);
+}
+.game.thisorthat .tot-checks li.ok b {
+  color: var(--mint);
+}
+.game.thisorthat .tot-checks li.no {
+  border-left-color: var(--danger);
+}
+.game.thisorthat .tot-checks li.no b {
+  color: #ffb3c0;
+}
+.game.thisorthat .tot-checks small {
+  color: var(--muted);
+}
+.game.thisorthat .tot-gain {
+  font-weight: 900;
+  color: var(--gold);
+}
+.game.thisorthat .tot-next {
+  width: 100%;
+  max-width: 460px;
+}
+.game.thisorthat .tot-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 0.85rem;
+}
+
+/* ---- final ---- */
+.game.thisorthat .tot-final {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+.game.thisorthat .tot-final h2 {
+  margin: 8px 0 0;
+}
+.game.thisorthat .tot-final p {
+  margin: 0;
+}
+.game.thisorthat .tot-ring {
+  --p: 0;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--pink) calc(var(--p) * 3.6deg), rgba(255, 255, 255, 0.1) 0);
+  animation: pop-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+.game.thisorthat .tot-ring > div {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.game.thisorthat .tot-ring b {
+  font-size: 2rem;
+  line-height: 1;
+}
+.game.thisorthat .tot-ring small {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  margin-top: 4px;
+}
+.game.thisorthat .tot-minds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+}
+.game.thisorthat .tot-mind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.game.thisorthat .tot-mind b {
+  font-size: 1.4rem;
+}
+.game.thisorthat .tot-mind small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.game.thisorthat .tot-final .tot-gain {
+  margin-top: 8px;
+}
+.game.thisorthat .tot-talk {
+  width: 100%;
+  max-width: 460px;
+  text-align: left;
+}
+.game.thisorthat .tot-talk h3 {
+  margin-bottom: 8px;
+}
+.game.thisorthat .tot-talk ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.game.thisorthat .tot-talk li {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.18);
+}
+.game.thisorthat .tot-talk li {
+  gap: 6px;
+}
+.game.thisorthat .tot-who {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+}
+.game.thisorthat .tot-who .avatar {
+  grid-row: 1 / 3;
+}
+.game.thisorthat .tot-who small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.1;
+}
+.game.thisorthat .tot-who b {
+  line-height: 1.25;
+}
+
+@media (max-width: 370px) {
+  .game.thisorthat .tot-opt {
+    min-height: 84px;
+    font-size: 0.98rem;
+    padding: 12px 10px;
+  }
+}

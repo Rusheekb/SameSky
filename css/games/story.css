@@ -1,1 +1,557 @@
-/* story styles */
+/* Story Chain — a warm paper "book page" glowing in the night sky. */
+.game.story {
+  --sc-paper: #fdf6e7;
+  --sc-paper-2: #f4e6cc;
+  --sc-ink: #2e2440;
+  --sc-ink-soft: #75668a;
+  --sc-gold: #b48a46;
+  --sc-twist: #7135b8;
+  --sc-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, 'Times New Roman', serif;
+  gap: 14px;
+}
+
+/* ---------------------------------------------------------------- book */
+.game.story .sc-book {
+  position: relative;
+  color: var(--sc-ink);
+  border-radius: 6px 16px 16px 6px;
+  background:
+    linear-gradient(90deg, rgba(120, 82, 40, 0.22) 0, rgba(120, 82, 40, 0.06) 10px, transparent 22px),
+    radial-gradient(120% 70% at 50% 0%, #fffaf0 0%, transparent 70%),
+    linear-gradient(180deg, var(--sc-paper) 0%, var(--sc-paper-2) 100%);
+  box-shadow:
+    -3px 3px 0 -1px #e7d5b1,
+    -6px 6px 0 -2px #d9c399,
+    0 18px 40px rgba(0, 0, 0, 0.45),
+    0 0 60px rgba(255, 212, 121, 0.14);
+  margin-left: 6px;
+}
+/* ribbon bookmark */
+.game.story .sc-book::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: 22px;
+  width: 14px;
+  height: 46px;
+  background: linear-gradient(180deg, var(--pink-2), var(--pink));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 2;
+  pointer-events: none;
+}
+.game.story .sc-page {
+  position: relative;
+  /* Fill the space the rest of the screen leaves (so the buttons never hide under the
+     reactions bar), but never get uncomfortably small. */
+  max-height: max(220px, calc(100dvh - 350px));
+  transition: max-height 0.35s ease;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 20px 18px 24px;
+  font-family: var(--sc-serif);
+  font-size: 1.07rem;
+  line-height: 1.68;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 10px), transparent 100%);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(46, 36, 64, 0.25) transparent;
+  overflow-wrap: anywhere;
+}
+.game.story .sc-book.writer .sc-page {
+  max-height: max(170px, calc(100dvh - 455px));
+}
+.game.story .sc-book.ending .sc-page {
+  max-height: max(140px, calc(100dvh - 560px));
+}
+.game.story .sc-book.final .sc-page {
+  max-height: none;
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
+  padding: 26px 22px 24px 26px;
+}
+
+.game.story .sc-head {
+  text-align: center;
+  margin-bottom: 12px;
+  padding: 0 18px;
+}
+.game.story .sc-kicker,
+.game.story .sc-orn {
+  font-family: var(--font);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sc-gold);
+}
+.game.story .sc-orn {
+  font-size: 0.8rem;
+  letter-spacing: 0.5em;
+  margin-bottom: 4px;
+}
+.game.story .sc-title {
+  font-family: var(--sc-serif);
+  font-size: 1.32rem;
+  font-weight: 700;
+  margin: 2px 0 6px;
+  color: var(--sc-ink);
+  line-height: 1.2;
+}
+.game.story .sc-book.final .sc-title {
+  font-size: 1.6rem;
+}
+.game.story .sc-byline {
+  font-style: italic;
+  color: var(--sc-ink-soft);
+  font-size: 0.92rem;
+  margin: 0 0 8px;
+}
+.game.story .sc-legend {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--font);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--sc-ink-soft);
+}
+.game.story .sc-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.game.story .sc-who i {
+  width: 18px;
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--hl) 70%, transparent);
+}
+
+.game.story .sc-page p {
+  margin: 0 0 0.7em;
+}
+.game.story .sc-opening {
+  font-style: italic;
+  color: #3d3150;
+}
+.game.story .sc-opening::first-letter {
+  float: left;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 3.1em;
+  line-height: 0.82;
+  padding: 6px 8px 0 0;
+  color: var(--pink-2);
+  text-shadow: 1px 1px 0 rgba(180, 138, 70, 0.35);
+}
+
+/* each author's sentences: a soft highlighter stroke in their colour */
+.game.story .sc-line {
+  --mark: color-mix(in srgb, var(--hl) 46%, transparent);
+  background-image: linear-gradient(var(--mark), var(--mark));
+  background-repeat: no-repeat;
+  background-size: 100% 0.52em;
+  background-position: 0 92%;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.game.story .sc-line.sc-new {
+  animation: sc-ink 1s ease-out both;
+}
+@keyframes sc-ink {
+  0% {
+    opacity: 0;
+    background-size: 0% 0.52em;
+  }
+  35% {
+    opacity: 1;
+    background-size: 0% 0.52em;
+  }
+  100% {
+    opacity: 1;
+    background-size: 100% 0.52em;
+  }
+}
+
+.game.story .sc-twist {
+  margin: 4px -6px 14px;
+  padding: 10px 14px 8px;
+  text-align: center;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(182, 156, 255, 0.2), rgba(255, 126, 182, 0.14));
+  border: 1px dashed rgba(113, 53, 184, 0.35);
+}
+.game.story .sc-twist p {
+  margin: 2px 0 2px;
+  font-style: italic;
+  color: var(--sc-twist);
+}
+.game.story .sc-twist-tag {
+  font-family: var(--font);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9258d6;
+}
+.game.story .sc-twist small {
+  display: block;
+  font-family: var(--font);
+  font-size: 0.72rem;
+  color: var(--sc-ink-soft);
+}
+.game.story .sc-twist.sc-new {
+  animation: sc-twist-in 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+@keyframes sc-twist-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) rotate(-1.5deg);
+    box-shadow: 0 0 0 rgba(182, 156, 255, 0);
+  }
+  60% {
+    opacity: 1;
+    box-shadow: 0 0 26px rgba(182, 156, 255, 0.7);
+  }
+  100% {
+    transform: none;
+    box-shadow: 0 0 0 rgba(182, 156, 255, 0);
+  }
+}
+
+.game.story .sc-ghost {
+  display: inline-block;
+  white-space: nowrap;
+  color: var(--sc-ink-soft);
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--hl) 22%, transparent);
+  font-family: var(--font);
+  font-weight: 800;
+}
+.game.story .sc-ghost i,
+.game.story .sc-typing i {
+  font-style: normal;
+  animation: blink 1.4s infinite both;
+}
+.game.story .sc-ghost i:nth-of-type(2),
+.game.story .sc-typing i:nth-of-type(2) {
+  animation-delay: 0.2s;
+}
+.game.story .sc-ghost i:nth-of-type(3),
+.game.story .sc-typing i:nth-of-type(3) {
+  animation-delay: 0.4s;
+}
+.game.story .sc-quill {
+  display: inline-block;
+  font-size: 0.9em;
+  margin-right: 2px;
+  animation: sc-write 0.9s ease-in-out infinite alternate;
+}
+@keyframes sc-write {
+  from {
+    transform: translateX(-1px) rotate(-8deg);
+  }
+  to {
+    transform: translateX(2px) rotate(6deg);
+  }
+}
+.game.story .sc-empty {
+  color: rgba(117, 102, 138, 0.7);
+  font-style: italic;
+  text-align: center;
+}
+
+.game.story .sc-epilogue {
+  margin-top: 1em !important;
+  padding-top: 0.9em;
+  border-top: 1px solid rgba(180, 138, 70, 0.3);
+  text-align: center;
+  font-style: italic;
+  color: #4a3d5e;
+}
+.game.story .sc-fin {
+  text-align: center;
+  font-variant: small-caps;
+  letter-spacing: 0.2em;
+  font-weight: 700;
+  color: var(--sc-gold);
+  margin: 0.4em 0 0 !important;
+}
+.game.story .sc-fin::before,
+.game.story .sc-fin::after {
+  content: '❦';
+  margin: 0 0.6em;
+  letter-spacing: 0;
+  font-variant: normal;
+}
+
+/* ---------------------------------------------------------------- turn + composer */
+.game.story .sc-chip {
+  font-variant-numeric: tabular-nums;
+}
+.game.story .sc-turn {
+  --pc: var(--pink);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.95rem;
+  min-height: 46px;
+}
+.game.story .sc-turn.typing {
+  border-color: color-mix(in srgb, var(--pc) 65%, transparent);
+  background: color-mix(in srgb, var(--pc) 15%, transparent);
+}
+.game.story .sc-turn span {
+  min-width: 0;
+}
+
+.game.story .sc-compose {
+  --pc: var(--pink);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fade-up 0.3s ease both;
+}
+.game.story .sc-compose-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  padding-left: 2px;
+}
+.game.story .sc-compose-label i {
+  font-style: normal;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--pc) 30%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--pc) 45%, transparent);
+  animation: sc-write 0.9s ease-in-out infinite alternate;
+}
+.game.story .sc-compose textarea {
+  min-height: 70px;
+  resize: none;
+  line-height: 1.4;
+  border-color: color-mix(in srgb, var(--pc) 55%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--pc) 16%, transparent);
+}
+.game.story .sc-compose-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.game.story .sc-left {
+  color: var(--muted);
+}
+.game.story .sc-left.near {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.game.story .sc-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.game.story .sc-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  min-width: 0;
+}
+.game.story .sc-note {
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.game.story .sc-note.live {
+  color: #cdb8ff;
+  font-weight: 700;
+}
+.game.story .sc-twist-btn {
+  background: linear-gradient(135deg, rgba(182, 156, 255, 0.35), rgba(255, 126, 182, 0.25));
+  border-color: rgba(182, 156, 255, 0.55);
+}
+.game.story .sc-twist-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(182, 156, 255, 0.5), rgba(255, 126, 182, 0.35));
+}
+.game.story .sc-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 0.78rem;
+}
+.game.story .sc-end-btn.ready {
+  border-color: rgba(255, 212, 121, 0.7);
+  background: rgba(255, 212, 121, 0.14);
+  color: var(--gold);
+  animation: sc-ready 2.4s ease-in-out infinite;
+}
+@keyframes sc-ready {
+  50% {
+    box-shadow: 0 0 18px rgba(255, 212, 121, 0.35);
+  }
+}
+.game.story .sc-hint {
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- ending */
+.game.story .sc-ending {
+  gap: 8px;
+}
+.game.story .sc-ending-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  width: 100%;
+}
+.game.story .sc-ending-head b {
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+.game.story .sc-ending-head small {
+  color: var(--muted);
+}
+.game.story .sc-ending-emoji {
+  font-size: 1.9rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 10px rgba(255, 212, 121, 0.45));
+}
+.game.story .sc-title-form {
+  gap: 10px;
+  padding: 14px;
+  border-color: rgba(255, 212, 121, 0.35);
+  background: linear-gradient(160deg, rgba(255, 212, 121, 0.1), rgba(255, 126, 182, 0.06));
+}
+.game.story .sc-title-row {
+  display: flex;
+  gap: 8px;
+}
+.game.story .sc-title-row .input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--sc-serif);
+  font-style: italic;
+}
+.game.story .sc-title-row .btn {
+  flex: none;
+  padding: 10px 14px;
+}
+.game.story .sc-suggest {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.game.story .sc-sugg {
+  appearance: none;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--sc-serif);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  cursor: pointer;
+  text-align: center;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    transform 0.12s;
+}
+.game.story .sc-sugg:hover {
+  background: var(--surface-2);
+}
+.game.story .sc-sugg:active {
+  transform: scale(0.97);
+}
+.game.story .sc-sugg:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+.game.story .sc-sugg.sel {
+  border-color: var(--gold);
+  background: rgba(255, 212, 121, 0.18);
+  box-shadow: 0 0 14px rgba(255, 212, 121, 0.25);
+}
+.game.story .sc-naming {
+  margin: 0;
+  text-align: center;
+}
+.game.story .sc-narrator {
+  gap: 10px;
+  padding: 14px;
+}
+.game.story .sc-narrator-icon {
+  font-size: 2.2rem;
+  animation: sc-write 1s ease-in-out infinite alternate;
+}
+.game.story .sc-resume {
+  align-self: center;
+}
+
+/* ---------------------------------------------------------------- keepsake */
+.game.story .sc-final {
+  gap: 16px;
+  align-items: stretch;
+}
+.game.story .sc-final .sc-book {
+  animation: sc-bind 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+@keyframes sc-bind {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateY(-14deg) translateY(10px);
+  }
+}
+.game.story .sc-result {
+  max-width: none;
+}
+.game.story .sc-result h2 {
+  margin: 0;
+}
+
+@media (max-width: 380px) {
+  .game.story .sc-page {
+    padding: 18px 16px 16px 20px;
+    font-size: 1.02rem;
+  }
+  .game.story .sc-turn {
+    font-size: 0.9rem;
+  }
+  .game.story .sc-compose-foot .btn {
+    padding: 12px 14px;
+  }
+  .game.story .sc-sugg {
+    font-size: 0.85rem;
+  }
+}

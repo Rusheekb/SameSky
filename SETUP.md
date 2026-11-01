@@ -81,15 +81,17 @@ meantime the game offers a "Try a direct connection instead" button.
 1. **Create a key** at <https://console.anthropic.com> → API Keys → *Create Key* (name it
    `same-sky`). Copy it once — don't paste it anywhere except step 3.
    Then **Settings → Limits** (or Billing) and set a small monthly spend limit, e.g. $5.
-2. **Pick a passcode** only the two of you know (a few words is great, e.g.
-   `pancakes-under-the-same-moon`). You'll type it once on each device.
+2. **Pick a passcode** only the two of you know — at least 8 characters; a few words is great,
+   e.g. `pancakes-under-the-same-moon`. You'll type it once on each device.
 3. **Store both as Supabase secrets** — in the Supabase dashboard: **Edge Functions → Secrets**
    (a.k.a. *Manage secrets*) → add:
    - `ANTHROPIC_API_KEY` = your key
    - `APP_PASSCODE` = your passcode
    - optional `ANTHROPIC_MODEL` (default `claude-opus-5-5`; `claude-haiku-5-5` is much cheaper
      and fine for party prompts)
-   - optional `ALLOWED_ORIGINS` = `https://rusheekb.github.io` (locks the function to your site)
+   - optional `AI_EFFORT` = `low` (default), `medium` or `high` — how hard Claude thinks
+   - optional `ALLOWED_ORIGINS` = `https://rusheekb.github.io` (locks the function to your
+     site; comma-separate extra origins, e.g. add `http://localhost:5173` for local testing)
 4. **Deploy the function** — pick one:
    - **From GitHub (no installs):** create a Supabase access token at
      <https://supabase.com/dashboard/account/tokens>, then in GitHub add a repository **secret**

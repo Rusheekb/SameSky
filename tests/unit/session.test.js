@@ -195,3 +195,16 @@ test('every registered game can init and ignore junk actions without throwing', 
     assert.ok(mod.meta.title && mod.meta.emoji && mod.meta.id === id);
   }
 });
+
+test('each started game gets a fresh instance number (fx channels never collide)', async () => {
+  const { a, b, time } = await makePair();
+  a.dispatch({ type: 'startGame', id: 'insync' });
+  time.flush();
+  const n1 = a.state.game.n;
+  a.dispatch({ type: 'endGame' });
+  time.flush();
+  b.dispatch({ type: 'startGame', id: 'insync' });
+  time.flush();
+  assert.equal(b.state.game.n, n1 + 1);
+  assert.deepEqual(a.state, b.state);
+});

@@ -15,6 +15,7 @@ export function initialState(room) {
     players: {}, // clientId -> player
     settings: { vibe: 'sweet', ai: false, aboutUs: '' },
     game: null, // { id, s, startedAt, n }
+    gameSeq: 0, // how many games have been started in this room (instance counter)
     scores: { together: 0, games: 0 },
     history: [], // [{ id, title, emoji, summary, points, at }]
   };
@@ -109,7 +110,9 @@ export function reduce(state, action, ctx) {
       }
       return {
         ...state,
-        game: { id: action.id, s, startedAt: ctx.now, n: (state.game?.n || 0) + 1 },
+        // `n` numbers game instances for the whole room so per-game fx channels never collide.
+        game: { id: action.id, s, startedAt: ctx.now, n: (state.gameSeq || 0) + 1 },
+        gameSeq: (state.gameSeq || 0) + 1,
       };
     }
     case 'game': {

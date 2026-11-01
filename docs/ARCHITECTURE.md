@@ -130,3 +130,8 @@ Common params (all optional): `vibe` (`sweet|flirty|silly|deep`), `aboutUs` (≤
 | `story_twist` | Story Chain | `story` (≤ 2000 chars) | `{ twist }` — one sentence that continues the story with a surprise |
 | `story_end` | Story Chain | `story` (≤ 2000 chars) | `{ title, epilogue }` |
 | `recap` | Night recap sheet | `highlights` (≤ 20 × ≤ 200 chars) | `{ title, poem }` — ≤ 12 short lines, `\n`-separated |
+
+The ×N counts are maximums: the server drops invalid items and may return fewer (at least 3;
+`doodle_words` at least 6), otherwise it answers 502. Status codes the client can see:
+401/403 wrong passcode or origin · 413 request too large · 422 Claude declined · 429 rate
+limited (`Retry-After`) · 502 unusable output or upstream error · 500 server not configured.
