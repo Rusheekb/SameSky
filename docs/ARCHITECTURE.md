@@ -25,10 +25,24 @@ tests/e2e/            Playwright two-player tests      → npm run test:e2e
 ## Real-time model
 
 Two clients share one **room state**. The online player with the smallest `clientId` is the
-**authority**: it runs `reduce()` and broadcasts the whole new state (`v` bumps each commit).
-The other client sends actions to it and adopts whatever it broadcasts. If the authority drops,
-the other one takes over with its latest copy; on reconnect, `(v, by)` decides which copy wins.
-State is also persisted in `localStorage`, so a refresh resumes where you were.
+**authority**: it runs `reduce()` and broadcasts the whole new state after every change. The
+other client sends actions to it and adopts whatever it broadcasts. If the authority drops, the
+other one takes over with its latest copy. State is persisted in `localStorage`, so a refresh
+resumes where you were. The protocol (`js/core/session.js`) is built to survive phones:
+
+- **Sync gate** — a client that loads a saved state, wakes from the background or reconnects
+  doesn't lead (commit or tick) until it has compared versions with its partner, or 3 s pass
+  alone. Taps in the meantime are queued, so a stale copy never overwrites the partner's moves.
+- **Terms** — states are ordered by `(term, v, by)`; whoever takes over as authority bumps
+  `term`, so an old authority's copy can't beat its successor's.
+- **Exactly-once actions** — actions carry `(nonce, seq)` and are re-sent until the
+  authority's state acknowledges them (`state.acks`); duplicates are ignored.
+- **Anti-entropy** — pings carry the state version; whoever is behind is sent the state again,
+  so a dropped broadcast heals within ~2 s.
+- **One timeline** — `now()` follows the authority's clock (offset learned from its messages,
+  frozen on take-over), so countdowns agree across phones with skewed clocks.
+- **Seats** — a third device can only take a seat after the player has been gone 90 s; the
+  running game is recorded first. Everything adopted from the network is sanitised.
 
 Anything that's high-frequency or doesn't need to survive a refresh (doodle strokes, emoji
 reactions, "typing…" hints) goes through **fx** messages instead of state.
@@ -53,7 +67,13 @@ export const meta = {
 export function init(ctx, opts) { return s; }      // opts.content = AI result (validate it!)
 export function reduce(s, a, ctx) { return s2; }   // a = { type, ...payload, by }
 export function tick(s, ctx) { return s2; }        // optional; authority calls it every 250 ms
+export function summarize(s, ctx) { return { summary, highlights }; } // optional; used when the game is left mid-way
 ```
+
+Actions may be delivered late (after a reconnect) or raced by the partner's action, so make
+them carry what they refer to (e.g. `{ type: 'next', round }`, `{ type: 'newPrompt', from }`)
+and ignore stale ones. Views should keep typed text until the state shows it landed
+(`AnswerBox clearOnSubmit={false}` + a `key` per question).
 
 `ctx` = `{ players: [id1, id2], names: {id: name}, by, now, random, settings }`
 - `players` is in stable join order → use it to assign roles (`players[0]` goes first, etc.).

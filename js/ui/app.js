@@ -90,6 +90,15 @@ export function ProfileSetup({ initial, onSave, onCancel, inviteCode }) {
   </main>`;
 }
 
+/** Accept a bare code, a formatted code ("K7Q-M2X") or a whole pasted invite link. */
+export function codeFromInput(input) {
+  const raw = String(input || '').trim();
+  const m = raw.match(/#\/r\/([A-Za-z0-9-]+)/);
+  if (m) return normalizeRoomCode(m[1]);
+  if (/:\/\/|\//.test(raw)) return ''; // a link without a room in it
+  return normalizeRoomCode(raw);
+}
+
 function Home({ profile, onEditProfile }) {
   const [code, setCode] = useState('');
   const recent = storage.get('recentRooms', []);
@@ -98,10 +107,11 @@ function Home({ profile, onEditProfile }) {
     storage.set(`creator:${c}`, true);
     location.hash = `#/r/${c}`;
   };
+  const parsed = codeFromInput(code);
+  const looksLikeLink = /:\/\/|\//.test(code) && !parsed;
   const join = (e) => {
     e.preventDefault();
-    const c = normalizeRoomCode(code);
-    if (isValidRoomCode(c)) location.hash = `#/r/${c}`;
+    if (isValidRoomCode(parsed)) location.hash = `#/r/${parsed}`;
   };
   return html`<main class="screen narrow">
     <div class="brand"><span class="brand-moon">🌙</span><h1>Same Sky</h1></div>
@@ -114,10 +124,11 @@ function Home({ profile, onEditProfile }) {
       </div>
       <button class="btn btn-primary btn-lg" onClick=${create}>✨ Create our room</button>
       <form class="row gap" onSubmit=${join}>
-        <input class="input grow" value=${code} placeholder="Room code" aria-label="Room code"
-          maxLength="30" onInput=${(e) => setCode(e.currentTarget.value)} />
-        <button class="btn" type="submit" disabled=${!isValidRoomCode(normalizeRoomCode(code))}>Join</button>
+        <input class="input grow" value=${code} placeholder="Code or invite link" aria-label="Room code or invite link"
+          maxLength="300" onInput=${(e) => setCode(e.currentTarget.value)} />
+        <button class="btn" type="submit" disabled=${!isValidRoomCode(parsed)}>Join</button>
       </form>
+      ${looksLikeLink && html`<p class="form-error">That link has no room in it — paste just the code, or open the invite link itself.</p>`}
     </div>
 
     ${recent.length > 0 &&

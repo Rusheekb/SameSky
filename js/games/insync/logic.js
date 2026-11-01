@@ -5,7 +5,7 @@
 // as pure functions, and stores `done`, `points`, `summary`, `highlights` on its state for the recap.
 
 import { SEED_PAIRS } from '../../content/insync.js';
-import { cleanText, normalizeWord, wordsMatch, shuffle } from '../../lib/util.js';
+import { cleanText, matchKey, wordsMatch, shuffle } from '../../lib/util.js';
 
 export const MAX_ROUNDS = 10;
 
@@ -21,11 +21,23 @@ export const meta = {
 };
 
 function validPairs(content) {
-  const pairs = Array.isArray(content?.pairs) ? content.pairs : [];
-  return pairs
-    .map((p) => (Array.isArray(p) ? p : [p?.a, p?.b]).map((w) => cleanText(w, 30)))
-    .filter(([a, b]) => a && b && normalizeWord(a) !== normalizeWord(b));
+  const pairs = Array.isArray(content?.pairs) ? content.pairs.slice(0, 40) : [];
+  const seen = new Set();
+  const out = [];
+  for (const p of pairs) {
+    const [a, b] = (Array.isArray(p) ? p : [p?.a, p?.b]).map((w) => (typeof w === 'string' ? cleanText(w, 30) : ''));
+    if (!a || !b || !matchKey(a) || !matchKey(b) || matchKey(a) === matchKey(b)) continue;
+    const key = [matchKey(a), matchKey(b)].sort().join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push([a, b]);
+    if (out.length >= 12) break;
+  }
+  return out;
 }
+
+/** True when the text is usable as a word (letters/numbers of any script, or emoji). */
+export const isWord = (w) => !!matchKey(w);
 
 export function init(ctx, opts = {}) {
   const fromAi = validPairs(opts.content);
@@ -59,7 +71,7 @@ export function reduce(s, a, ctx) {
     case 'submit': {
       if (s.phase !== 'pick' || s.words[a.by]) return s;
       const word = cleanText(a.word, 40);
-      if (!word || !normalizeWord(word)) return s;
+      if (!word || !isWord(word)) return s;
       // Saying one of the two words you're linking doesn't count.
       if (s.pair.some((w) => wordsMatch(w, word))) return s;
       const words = { ...s.words, [a.by]: word };
@@ -124,4 +136,14 @@ export function reduce(s, a, ctx) {
     default:
       return s;
   }
+}
+
+/** Recap line when the game is left part-way (✕) instead of finished. */
+export function summarize(s, ctx) {
+  if (s.done || !s.rounds.length) return { summary: s.summary, highlights: s.highlights };
+  const trail = s.rounds.map((r) => ctx.players.map((id) => r.words[id]).join(' / ')).join(' → ');
+  return {
+    summary: `Stopped after ${s.rounds.length} round${s.rounds.length === 1 ? '' : 's'} (from ${s.seed.join(' + ')})`,
+    highlights: [...s.highlights, `${s.seed.join(' + ')} → ${trail}`].slice(-6),
+  };
 }

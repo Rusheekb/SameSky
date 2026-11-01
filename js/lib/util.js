@@ -71,7 +71,8 @@ export function normalizeWord(input) {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[’']/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
+    // Keep letters/digits from every script plus emoji, so "☕", "любовь" and "愛" count as words.
+    .replace(/[^\p{L}\p{N}\p{Extended_Pictographic}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   s = s.replace(/^(the|a|an) /, '');
@@ -82,7 +83,7 @@ export function normalizeWord(input) {
 }
 
 function singularize(w) {
-  if (w.length <= 3) return w;
+  if (w.length <= 3 || !/^[a-z]+$/.test(w)) return w;
   if (w.endsWith('ies') && w.length > 4) return w.slice(0, -3) + 'y';
   if (/(ss|sh|ch|x|z)es$/.test(w)) return w.slice(0, -2);
   if (w.endsWith('ss') || w.endsWith('us') || w.endsWith('is')) return w;
@@ -90,9 +91,12 @@ function singularize(w) {
   return w;
 }
 
+/** Comparison key: normalised with spaces removed, so "ice cream" = "icecream" and "Wi-Fi" = "wifi". */
+export const matchKey = (s) => normalizeWord(s).replace(/\s+/g, '');
+
 export const wordsMatch = (a, b) => {
-  const na = normalizeWord(a);
-  return na.length > 0 && na === normalizeWord(b);
+  const ka = matchKey(a);
+  return ka.length > 0 && ka === matchKey(b);
 };
 
 export function levenshtein(a, b) {
@@ -114,8 +118,8 @@ export function levenshtein(a, b) {
 
 /** True when a guess is a near-miss (typo-level) but not an exact match. */
 export function isCloseGuess(guess, answer) {
-  const g = normalizeWord(guess);
-  const a = normalizeWord(answer);
+  const g = matchKey(guess);
+  const a = matchKey(answer);
   if (!g || !a || g === a) return false;
   const d = levenshtein(g, a);
   if (a.length >= 8) return d <= 2;

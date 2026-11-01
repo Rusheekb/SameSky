@@ -13,8 +13,11 @@ export function createMemoryHub({ schedule = (fn) => setTimeout(fn, 0) } = {}) {
       nodes.add(t);
       return t;
     },
+    // Optional (fromId, msg) => false to drop a message (simulates a lossy network).
+    filter: null,
     deliver(fromT, msg) {
       if (hub.partitioned.has(fromT.id)) return;
+      if (hub.filter && hub.filter(fromT.id, msg) === false) return;
       const wire = JSON.stringify(msg);
       for (const t of nodes) {
         if (t === fromT || !t.open || hub.partitioned.has(t.id)) continue;

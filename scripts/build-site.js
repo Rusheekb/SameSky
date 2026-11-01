@@ -14,16 +14,31 @@ const env = (k) => (process.env[k] || '').trim();
 let supabaseUrl = env('SUPABASE_URL').replace(/\/+$/, '');
 const supabaseAnonKey = env('SUPABASE_ANON_KEY');
 
-if (supabaseUrl && !/^https:\/\/[a-z0-9.-]+$/i.test(supabaseUrl)) {
-  console.warn(`::warning::SUPABASE_URL "${supabaseUrl}" doesn't look like https://<project>.supabase.co — ignoring it.`);
+// Anything that looks like a secret must never reach the public website (or the build log).
+function looksSecret(v) {
+  if (/sk-ant-|sb_secret_/i.test(v)) return true;
+  try {
+    return /service_role/i.test(Buffer.from(v.split('.')[1] || '', 'base64').toString());
+  } catch {
+    return false;
+  }
+}
+for (const k of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'AI_ENABLED']) {
+  if (looksSecret(env(k))) {
+    console.error(`::error::${k} looks like a SECRET key (Anthropic key, Supabase secret or service_role key). Only public values may be used in the website. Aborting — and rotate that key.`);
+    process.exit(1);
+  }
+}
+if (supabaseUrl && !/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$|^https:\/\/[a-z0-9.-]+$/i.test(supabaseUrl)) {
+  console.warn("::warning::SUPABASE_URL doesn't look like https://<project-ref>.supabase.co — ignoring it.");
   supabaseUrl = '';
 }
-if (/^sk-ant-/i.test(supabaseAnonKey) || /^sb_secret_/i.test(supabaseAnonKey) || /service_role/i.test(Buffer.from(supabaseAnonKey.split('.')[1] || '', 'base64').toString())) {
-  console.error('::error::SUPABASE_ANON_KEY looks like a SECRET key. Only the anon/publishable key may be used in the website. Aborting.');
-  process.exit(1);
-}
 const hasSupabase = !!(supabaseUrl && supabaseAnonKey);
-const aiEnabled = hasSupabase && /^(1|true|yes|on)$/i.test(env('AI_ENABLED'));
+const wantsAi = /^(1|true|yes|on)$/i.test(env('AI_ENABLED'));
+if (wantsAi && !hasSupabase) {
+  console.warn('::warning::AI_ENABLED is set but SUPABASE_URL / SUPABASE_ANON_KEY are missing, so AI stays off. Add them (SETUP.md, section 2).');
+}
+const aiEnabled = hasSupabase && wantsAi;
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });

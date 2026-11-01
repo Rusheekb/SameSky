@@ -62,3 +62,45 @@ test('AI-provided seed pairs are used and sanitised', () => {
   assert.equal(h.s.pool.length, 0);
   assert.equal(h.s.ai, true);
 });
+
+test('emoji, other scripts and spacing variants count as the same word', () => {
+  const h = gameHarness(insync);
+  h.act('p1', { type: 'submit', word: '☕' });
+  h.act('p2', { type: 'submit', word: '☕' });
+  assert.equal(h.s.phase, 'synced');
+  const g = gameHarness(insync, { seed: 9 });
+  g.act('p1', { type: 'submit', word: 'Ice cream' });
+  g.act('p2', { type: 'submit', word: 'icecream' });
+  assert.equal(g.s.phase, 'synced');
+  const k = gameHarness(insync, { seed: 4 });
+  k.act('p1', { type: 'submit', word: 'любовь' });
+  assert.equal(k.s.words.p1, 'любовь');
+  // Pure punctuation is still rejected.
+  const before = k.s;
+  k.act('p2', { type: 'submit', word: '?!' });
+  assert.equal(k.s, before);
+});
+
+test('on-screen words cannot be dodged with spacing or hyphens', () => {
+  const h = gameHarness(insync, { opts: { content: { pairs: [{ a: 'Video call', b: 'Wi-Fi' }] } } });
+  const s0 = h.s;
+  h.act('p1', { type: 'submit', word: 'wifi' });
+  h.act('p1', { type: 'submit', word: 'videocall' });
+  assert.equal(h.s, s0);
+});
+
+test('AI pairs are capped and de-duplicated', () => {
+  const pairs = Array.from({ length: 500 }, (_, i) => ({ a: `Word${i % 20}`, b: `Other${i % 20}` }));
+  const h = gameHarness(insync, { opts: { content: { pairs } } });
+  assert.ok(h.s.pool.length <= 11);
+  assert.ok(JSON.stringify(h.s).length < 4000);
+});
+
+test('summarize keeps a recap line when leaving mid-game', () => {
+  const h = gameHarness(insync);
+  h.act('p1', { type: 'submit', word: 'alpha' });
+  h.act('p2', { type: 'submit', word: 'omega' });
+  const sum = insync.summarize(h.s, h.ctx());
+  assert.match(sum.summary, /Stopped after 1 round/);
+  assert.match(sum.highlights.at(-1), /alpha \/ omega/);
+});

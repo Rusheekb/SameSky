@@ -12,6 +12,8 @@
   --muted: #b8acd9;
   --pink: #ff7eb6;
   --pink-2: #ff4f9a;
+  --cta-1: #d63384; /* primary buttons: white text stays >= 4.5:1 */
+  --cta-2: #b0175a;
   --gold: #ffd479;
   --mint: #7ef0c4;
   --blue: #6ec8ff;
@@ -252,13 +254,13 @@ small {
   outline-offset: 2px;
 }
 .btn-primary {
-  background: linear-gradient(135deg, var(--pink) 0%, var(--pink-2) 100%);
+  background: linear-gradient(135deg, var(--cta-1) 0%, var(--cta-2) 100%);
   border-color: transparent;
   color: #fff;
   box-shadow: 0 6px 20px rgba(255, 79, 154, 0.35);
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, #ff93c3 0%, #ff63a8 100%);
+  background: linear-gradient(135deg, #e0428c 0%, #c2185b 100%);
 }
 .btn-ghost {
   background: transparent;
@@ -601,7 +603,9 @@ fieldset {
   padding-top: 24px;
 }
 .invite-code {
-  font-size: 2.2rem;
+  font-size: clamp(1.1rem, 8vw, 2.2rem);
+  overflow-wrap: anywhere;
+  line-height: 1.15;
   font-weight: 900;
   letter-spacing: 0.12em;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1040,8 +1044,12 @@ fieldset {
   font-weight: 800;
   background: rgba(20, 16, 43, 0.85);
   padding: 6px 14px;
-  border-radius: 999px;
-  white-space: nowrap;
+  border-radius: 16px;
+  white-space: normal;
+  text-align: center;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  overflow-wrap: anywhere;
 }
 @keyframes heart-pulse {
   0% {
@@ -1129,6 +1137,26 @@ fieldset {
     opacity: 0;
   }
 }
+.sheet-footer {
+  position: sticky;
+  bottom: calc(-18px - var(--safe-b));
+  margin: 0 -16px calc(-18px - var(--safe-b));
+  padding: 12px 16px calc(12px + var(--safe-b));
+  background: linear-gradient(180deg, rgba(29, 22, 64, 0), var(--bg-2) 30%);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.lobby-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 12px;
+}
+.btn.armed {
+  background: rgba(255, 107, 129, 0.25);
+  border-color: var(--danger);
+}
 .score-big {
   font-size: 1.1rem;
 }
@@ -1190,5 +1218,33 @@ fieldset {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Reactions, heartbeats and confetti still need to be SEEN: fade in place, no movement. */
+  #fx-layer .fx-float,
+  #fx-layer .fx-confetti,
+  #fx-layer .fx-heartpulse {
+    animation-name: fx-fade !important;
+    animation-duration: 2.4s !important;
+    animation-delay: 0s !important;
+    animation-timing-function: ease !important;
+    animation-fill-mode: forwards !important;
+  }
+  #fx-layer .fx-float {
+    bottom: 120px;
+  }
+  #fx-layer .fx-confetti {
+    top: 20vh;
+  }
+}
+@keyframes fx-fade {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }

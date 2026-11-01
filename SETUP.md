@@ -64,6 +64,10 @@ meantime the game offers a "Try a direct connection instead" button.
 
 ## 3. AI-written prompts with Claude (optional)
 
+> **Needs section 2 first** — the website reaches the AI function through your Supabase project,
+> so the `SUPABASE_URL` and `SUPABASE_ANON_KEY` variables must be set (this also moves the
+> real-time connection to Supabase, which is what you want anyway).
+
 ### How your key stays safe
 
 * The Anthropic key **never** goes into this repo, GitHub variables/secrets, the website, or a
@@ -81,8 +85,9 @@ meantime the game offers a "Try a direct connection instead" button.
 1. **Create a key** at <https://console.anthropic.com> → API Keys → *Create Key* (name it
    `same-sky`). Copy it once — don't paste it anywhere except step 3.
    Then **Settings → Limits** (or Billing) and set a small monthly spend limit, e.g. $5.
-2. **Pick a passcode** only the two of you know — at least 8 characters; a few words is great,
-   e.g. `pancakes-under-the-same-moon`. You'll type it once on each device.
+2. **Pick a passcode** only the two of you know — a few words, at least 10 characters, e.g.
+   `pancakes-under-the-same-moon`. You'll type it once on each device. Avoid a single common
+   word like `iloveyou`: anyone who finds your site could try guessing it.
 3. **Store both as Supabase secrets** — in the Supabase dashboard: **Edge Functions → Secrets**
    (a.k.a. *Manage secrets*) → add:
    - `ANTHROPIC_API_KEY` = your key

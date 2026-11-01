@@ -1,7 +1,7 @@
 import { html } from '../../ui/h.js';
 import { GameHeader, LockStatus, AnswerBox, ResultActions, WaitingDots, useOnChange } from '../../ui/components.js';
 import { wordsMatch } from '../../lib/util.js';
-import { meta, MAX_ROUNDS } from './logic.js';
+import { meta, MAX_ROUNDS, isWord } from './logic.js';
 
 export default function InSyncView({ s, api }) {
   const me = api.me;
@@ -27,10 +27,17 @@ export default function InSyncView({ s, api }) {
       ${myWord
         ? html`<div class="card glow center"><p class="muted">You said</p><p class="big">${myWord}</p>
             <${WaitingDots} text=${`Waiting for ${partner?.name || 'your partner'}`} /></div>`
-        : html`<${AnswerBox} placeholder="Your word…" onSubmit=${(word) => {
-            api.act({ type: 'submit', word });
-            api.effects.sound('lock');
-          }} validate=${(v) => (s.pair.some((w) => wordsMatch(w, v)) ? 'Use a new word — not one of the two on screen 😉' : '')} />`}
+        : html`<${AnswerBox} key=${`r${s.round}:${s.plays}`} placeholder="Your word…" clearOnSubmit=${false}
+            onSubmit=${(word) => {
+              api.act({ type: 'submit', word });
+              api.effects.sound('lock');
+            }}
+            validate=${(v) =>
+              !isWord(v)
+                ? 'Type a word — letters, numbers or an emoji 🙂'
+                : s.pair.some((w) => wordsMatch(w, v))
+                  ? 'Use a new word — not one of the two on screen 😉'
+                  : ''} />`}
       <${LockStatus} api=${api} locked=${s.words} />
     </div>`}
 
@@ -59,8 +66,8 @@ export default function InSyncView({ s, api }) {
     ${s.rounds.length > 0 &&
     html`<details class="chain" open=${s.done}>
       <summary>Your word trail</summary>
+      <p class="muted small trail-start">Started from <b>${s.seed[0]}</b> + <b>${s.seed[1]}</b></p>
       <ol>
-        <li class="muted">${s.seed[0]} + ${s.seed[1]}</li>
         ${s.rounds.map(
           (r, i) => html`<li key=${i} class=${r.match ? 'match' : ''}>${api.players.map((id) => r.words[id]).join('  ·  ')}${r.match ? ' 💞' : ''}</li>`,
         )}

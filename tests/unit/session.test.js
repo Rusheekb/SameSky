@@ -99,12 +99,14 @@ test('a third person is told the room is full; an offline seat can be taken over
   assert.equal(c.full, true);
   assert.deepEqual(Object.keys(a.state.players).sort(), ['aaa', 'bbb']);
   c.stop();
-  // B leaves for good; B's new device (new id) can take the seat.
+  // B leaves for good; B's new device (new id) can take the seat — but only after a long absence.
   b.stop();
   time.advance(9000);
   const b2 = makeSession(time, hub, { id: 'bbb2', name: 'Blair' });
   await b2.start();
   time.advance(6000);
+  assert.deepEqual(Object.keys(a.state.players).sort(), ['aaa', 'bbb'], 'a short absence keeps the seat');
+  time.advance(95000);
   assert.deepEqual(Object.keys(a.state.players).sort(), ['aaa', 'bbb2']);
   assert.deepEqual(a.state, b2.state);
 });
@@ -207,4 +209,153 @@ test('each started game gets a fresh instance number (fx channels never collide)
   time.flush();
   assert.equal(b.state.game.n, n1 + 1);
   assert.deepEqual(a.state, b.state);
+});
+
+// ---------- regression tests for the real-time review ----------
+
+test("a returning authority's stale saved copy never rolls back the partner's move", async () => {
+  const time = new FakeTime();
+  const hub = createMemoryHub({ schedule: time.schedule });
+  const storeA = memoryStorage();
+  const a = makeSession(time, hub, { id: 'aaa', name: 'Alex', creator: true, storage: storeA });
+  const b = makeSession(time, hub, { id: 'bbb', name: 'Blair' });
+  await a.start();
+  await b.start();
+  time.advance(3000);
+  a.dispatch({ type: 'startGame', id: 'insync' });
+  time.flush();
+  // A's tab goes away (sends bye). B takes over and locks a word.
+  a.stop();
+  time.advance(500);
+  b.dispatch({ type: 'game', a: { type: 'submit', word: 'zebrafish' } });
+  time.flush();
+  assert.equal(b.state.game.s.words.bbb, 'zebrafish');
+  // A comes back with its older saved copy and immediately does the usual mount things.
+  const a2 = makeSession(time, hub, { id: 'aaa', name: 'Alex', storage: storeA });
+  await a2.start();
+  a2.updateProfile({ name: 'Alex' });
+  time.advance(6000);
+  assert.equal(a2.state.game.s.words.bbb, 'zebrafish', 'partner move survived');
+  assert.deepEqual(a2.state, b.state);
+  assert.equal(a2.isAuthority(), true);
+});
+
+test('a lost state broadcast is repaired by the ping version check', async () => {
+  const { a, b, time, hub } = await makePair();
+  a.dispatch({ type: 'startGame', id: 'insync' });
+  time.flush();
+  b.dispatch({ type: 'game', a: { type: 'submit', word: 'Beach' } });
+  time.flush();
+  hub.filter = (from, msg) => !(from === 'aaa' && msg.t === 'state'); // the reveal broadcast is lost
+  a.dispatch({ type: 'game', a: { type: 'submit', word: 'Cafe' } });
+  time.flush();
+  assert.notDeepEqual(a.state, b.state, 'one broadcast was lost');
+  hub.filter = null;
+  time.advance(5000);
+  assert.deepEqual(a.state, b.state);
+  assert.equal(b.state.game.s.phase, 'reveal');
+});
+
+test('an action sent into the void is re-sent and applied exactly once', async () => {
+  const { a, b, time, hub } = await makePair();
+  a.dispatch({ type: 'startGame', id: 'insync' });
+  time.flush();
+  // Drop B's next two action messages (first send + first retry).
+  let drops = 0;
+  hub.filter = (from, msg) => !(from === 'bbb' && msg.t === 'action' && drops++ < 2);
+  b.dispatch({ type: 'game', a: { type: 'submit', word: 'Lantern' } });
+  time.flush();
+  assert.equal(a.state.game.s.words.bbb, undefined);
+  time.advance(4000);
+  hub.filter = null;
+  time.advance(3000);
+  assert.equal(a.state.game.s.words.bbb, 'Lantern');
+  assert.equal(b.pendingCount(), 0);
+  // Duplicates of an applied action are ignored.
+  const v = a.state.v;
+  const [n, q] = a.state.acks.bbb;
+  a._onMessage({ t: 'action', from: 'bbb', room: 'TESTROOM', action: { type: 'game', a: { type: 'next' }, by: 'bbb', n, q } });
+  assert.equal(a.state.v, v);
+});
+
+test('actions queued while the authority silently vanished land after the hand-over', async () => {
+  const { a, b, time, hub } = await makePair();
+  b.dispatch({ type: 'startGame', id: 'insync' });
+  time.flush();
+  hub.partitioned.add('aaa'); // A vanishes without a bye
+  time.advance(1000);
+  b.dispatch({ type: 'game', a: { type: 'submit', word: 'Moonbeam' } }); // goes to A, lost
+  time.advance(9000); // B notices A is gone, takes over and applies its queued action
+  assert.equal(b.isAuthority(), true);
+  assert.equal(b.state.game.s.words.bbb, 'Moonbeam');
+  hub.partitioned.delete('aaa');
+  time.advance(5000);
+  assert.deepEqual(a.state, b.state);
+  assert.equal(a.state.game.s.words.bbb, 'Moonbeam');
+});
+
+test('countdowns keep one timeline across a hand-over even with skewed phone clocks', async () => {
+  const time = new FakeTime();
+  const hub = createMemoryHub({ schedule: time.schedule });
+  const a = makeSession(time, hub, { id: 'aaa', name: 'Alex', creator: true });
+  const b = makeSession(time, hub, { id: 'bbb', name: 'Blair' });
+  b.clock = () => time.t + 5000; // B's clock is 5 s fast
+  await a.start();
+  await b.start();
+  time.advance(5000);
+  const before = b.now() - a.now();
+  assert.ok(Math.abs(before) < 100);
+  hub.partitioned.add('aaa');
+  time.advance(9000);
+  assert.equal(b.isAuthority(), true);
+  // B leads now but keeps A's timeline: its now() did not jump by 5 s.
+  assert.ok(Math.abs(b.now() - a.now()) < 100, `jumped by ${b.now() - a.now()}`);
+});
+
+test('a page that was suspended does not tick or commit its stale copy before catching up', async () => {
+  const { a, b, time, hub } = await makePair();
+  a.dispatch({ type: 'startGame', id: 'insync' });
+  time.flush();
+  // Simulate A's page being frozen: it stops receiving and its timers stop for 20 s.
+  hub.partitioned.add('aaa');
+  const saved = a.timers;
+  const frozen = { ...saved };
+  a._intervals.forEach((h) => saved.clearInterval(h));
+  time.advance(9000);
+  b.dispatch({ type: 'game', a: { type: 'submit', word: 'Seashell' } });
+  time.advance(11000);
+  // A wakes up: a big heartbeat gap -> unsynced, so it must not lead with its old copy.
+  hub.partitioned.delete('aaa');
+  a.lastBeat = time.t - 20000;
+  a._heartbeat();
+  assert.equal(a.synced, false);
+  assert.equal(a.isAuthority(), false);
+  time.advance(4000);
+  assert.equal(a.state.game.s.words.bbb, 'Seashell');
+  assert.deepEqual(a.state, b.state);
+  void frozen;
+});
+
+test('profile no-ops and repeated joins do not bump the version', async () => {
+  const { a, b, time } = await makePair();
+  const v = a.state.v;
+  b.updateProfile({ name: 'Blair' });
+  a.updateProfile({ name: 'Alex' });
+  time.advance(5000);
+  assert.equal(a.state.v, v);
+});
+
+test('hostile state from the network is sanitised before adoption', async () => {
+  const { a, b, time } = await makePair();
+  const evil = JSON.parse(JSON.stringify(a.state));
+  evil.term = 99;
+  evil.players.bbb.color = '#fff;background-image:url(https://evil.example/x)';
+  evil.history = [null, 5, { title: { x: 1 }, summary: 'ok', highlights: [1, 'hi'] }];
+  b._onMessage({ t: 'state', from: 'ccc', room: 'TESTROOM', state: evil });
+  assert.equal(b.state.term, 99);
+  assert.equal(b.state.players.bbb.color, '#ff7eb6');
+  assert.equal(b.state.history.length, 1);
+  assert.equal(b.state.history[0].title, 'Game');
+  assert.deepEqual(b.state.history[0].highlights, ['hi']);
+  void time;
 });

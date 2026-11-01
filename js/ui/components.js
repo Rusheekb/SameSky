@@ -1,9 +1,11 @@
 // Shared UI building blocks for game views. Games should use these so every screen feels the same.
 import { html, useEffect, useState, useRef } from './h.js';
 
+const safeColor = (c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '#ff7eb6');
+
 export function Avatar({ player, size = 'md', online }) {
   if (!player) return html`<span class="avatar avatar-${size} avatar-empty">?</span>`;
-  return html`<span class="avatar avatar-${size}" style=${`--pc:${player.color}`} title=${player.name}>
+  return html`<span class="avatar avatar-${size}" style=${`--pc:${safeColor(player.color)}`} title=${player.name}>
     ${player.avatar}${online !== undefined && html`<i class=${`dot ${online ? 'on' : 'off'}`}></i>`}
   </span>`;
 }
@@ -15,7 +17,8 @@ export function GameHeader({ meta, round, total, api, children }) {
     <div class="game-meta">
       ${round != null && html`<span class="chip"><span class="hide-narrow">Round </span>${round}${total ? ` / ${total}` : ''}</span>`}
       ${children}
-      <button class="btn btn-ghost btn-sm" onClick=${() => api.confirmEnd()} aria-label="Back to games">✕</button>
+      <button class=${`btn btn-ghost btn-sm ${api.leaveArmed ? 'armed' : ''}`} onClick=${() => api.confirmEnd()}
+        aria-label=${api.leaveArmed ? 'Tap again to leave this game' : 'Leave this game'}>${api.leaveArmed ? 'Leave?' : '✕'}</button>
     </div>
   </div>`;
 }
@@ -64,8 +67,12 @@ export function ResultActions({ api, onAgain, againLabel = 'Play again' }) {
   </div>`;
 }
 
-/** Text input + submit button that keeps focus and clears after sending. */
-export function AnswerBox({ placeholder, button = 'Lock in', onSubmit, maxLength = 40, disabled, autoFocus = true, validate }) {
+/**
+ * Text input + submit. `clearOnSubmit={false}` keeps the text after sending: use it when the box
+ * unmounts once the answer is accepted, so a rejected or lost submit never eats what was typed.
+ * Give it a `key` tied to the question so a new question always starts empty.
+ */
+export function AnswerBox({ placeholder, button = 'Lock in', onSubmit, maxLength = 40, disabled, autoFocus = true, validate, clearOnSubmit = true }) {
   const [val, setVal] = useState('');
   const [err, setErr] = useState('');
   const ref = useRef(null);
@@ -83,7 +90,7 @@ export function AnswerBox({ placeholder, button = 'Lock in', onSubmit, maxLength
     }
     setErr('');
     onSubmit(v);
-    setVal('');
+    if (clearOnSubmit) setVal('');
   };
   return html`<form class="answer-box" onSubmit=${submit}>
     <input class="input" ref=${ref} value=${val} maxLength=${maxLength} placeholder=${placeholder}
