@@ -40,6 +40,14 @@ async function answer(page, kind, value) {
 
 const show = (kind, v, options) => (kind === 'choice' ? options[v] : kind === 'scale' ? `${v}/10` : v);
 
+/** Leave a running game through the header ✕ (it asks for a second tap before leaving). */
+async function leaveMidGame(page) {
+  await page.locator('.game-header .game-meta button').last().click();
+  const again = page.getByRole('button', { name: /again to leave/i });
+  await again.or(page.locator('.game-grid')).first().waitFor();
+  if (await again.count()) await again.click();
+}
+
 test('Know Me Better: 8 rounds on two phones, secrets hidden until the flip', { skip: !loadPlaywright() && 'playwright missing', timeout: 180000 }, async () => {
   const t = await openPair();
   const { a, b } = t;
@@ -191,14 +199,34 @@ test('Know Me Better: 8 rounds on two phones, secrets hidden until the flip', { 
     await t.shot(b, 'knowme-final-b');
     await a.screenshot({ path: `${SHOTS}knowme-final-full.png`, fullPage: true });
 
-    // Play again keeps the running total, then back to the lobby.
+    // Play again keeps the running total; two spot-on rounds, then leave mid-game through ✕.
     await b.getByRole('button', { name: 'Play again' }).click();
     await a.locator('.chip', { hasText: 'Round 1 / 8' }).waitFor();
     await b.locator('.km-skip', { hasText: '3 left' }).waitFor();
-    await t.backToLobby(a);
-    await a.locator('.score-pill', { hasText: String(expected) }).waitFor();
-    await b.locator('.score-pill', { hasText: String(expected) }).waitFor();
-    console.log(`kinds played: ${kinds.join(', ')} · together points ${expected}`);
+    for (let r = 1; r <= 2; r++) {
+      await a.locator('.chip', { hasText: `Round ${r} / 8` }).waitFor();
+      const kind = await kindOf(a);
+      const [real, guess] = kind === 'choice' ? CHOICE.hit : kind === 'scale' ? SCALE.hit : OPEN.hit;
+      await answer(r % 2 ? a : b, kind, real);
+      await answer(r % 2 ? b : a, kind, guess);
+      await a.locator('.km-result', { hasText: '+2 together points' }).waitFor();
+      await a.locator('.km-result .btn-primary').click();
+    }
+    await a.locator('.chip', { hasText: 'Round 3 / 8' }).waitFor();
+    await leaveMidGame(a);
+    for (const p of [a, b]) await p.locator('.game-grid').waitFor({ timeout: 10000 });
+    for (const p of [a, b]) await p.locator('.score-pill', { hasText: String(expected + 4) }).waitFor();
+    // The night recap keeps a running line for the unfinished game, not just "Ended early".
+    await b.locator('.score-pill').click();
+    const recap = b.getByRole('dialog', { name: 'Our night so far' });
+    await recap.waitFor();
+    const lines = await recap.locator('.history li').allInnerTexts();
+    assert.equal(lines.length, 1, lines.join('\n'));
+    assert.match(lines[0], /\+(\d+)/);
+    assert.equal(Number(lines[0].match(/\+(\d+)/)[1]), expected + 4);
+    assert.match(lines[0], /Over 1 game and 2 rounds: Alex knew Blair \d+\/5, Blair knew Alex \d+\/5/);
+    await t.shot(b, 'knowme-recap-after-leaving');
+    console.log(`kinds played: ${kinds.join(', ')} · together points ${expected + 4}`);
     t.assertNoErrors();
   } finally {
     await t.close();
@@ -232,10 +260,11 @@ async function assertFits(page, where) {
       const front = box(flip.querySelector('.km-front'));
       const value = flip.querySelector('.km-face-value');
       if (value.scrollWidth > value.clientWidth + 1 || box(value).right > front.right + 0.5) bad.push(`answer clipped: "${value.textContent}"`);
-      // "’s answer" / "’s guess" (or "Your …") is always visible, only a long name gives way.
-      const role = flip.querySelector('.km-face-role') || flip.querySelector('.km-face-name');
-      const rr = box(role);
-      if (!rr.width || rr.right > front.right + 0.5 || rr.right > box(flip.querySelector('.km-face-who')).right + 0.5) bad.push(`label cut: "${flip.querySelector('.km-face-label').textContent}"`);
+      // The whole "<Name>’s guess" label is readable: inside the card and nothing cut off.
+      const who = flip.querySelector('.km-face-who');
+      const wr = box(who);
+      if (!wr.width || wr.left < front.left || wr.right > front.right - 4 || who.scrollWidth > who.clientWidth + 1 || who.scrollHeight > who.clientHeight + 1)
+        bad.push(`label cut: "${who.textContent}" [${Math.round(wr.left)}, ${Math.round(wr.right)}] in [${Math.round(front.left)}, ${Math.round(front.right)}]`);
     }
     const cards = [...document.querySelectorAll('.km-flip')].map(box);
     if (cards.length === 2 && cards[0].right > cards[1].left) bad.push('flip cards overlap');
@@ -282,8 +311,12 @@ test('Know Me Better: 24-character names fit a 360px phone on every screen', { s
       // Always a miss, so open answers go to the judge screen (both long texts on the cards).
       const [real, guess] = kind === 'open' ? LONG_OPEN : kind === 'scale' ? [3, 9] : [3, 0];
       await answer(subj, kind, real);
+      await subj.locator('.km-locked').waitFor();
       await gues.locator('.lock.is-locked').first().waitFor();
-      await assertFits(gues, `${w} round ${r} partner locked`);
+      await subj.waitForTimeout(300);
+      await assertFits(subj, `${w} round ${r} locked in (subject)`);
+      await assertFits(gues, `${w} round ${r} partner locked (guesser)`);
+      await shotOnce(subj, `knowme-long-${w}-locked-subject`);
       await answer(gues, kind, guess);
       for (const p of [a, b]) await p.locator('.km-flip').nth(1).waitFor();
 

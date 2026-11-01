@@ -775,6 +775,10 @@ fieldset {
 .lock span {
   color: var(--muted);
 }
+.lock b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .lock.is-locked {
   border-color: rgba(126, 240, 196, 0.6);
 }

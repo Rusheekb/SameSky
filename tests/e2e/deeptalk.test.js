@@ -9,6 +9,55 @@ async function noHorizontalScroll(page) {
   assert.ok(sw <= w, `horizontal scroll: ${sw} > ${w}`);
 }
 
+/**
+ * `first` taps "Back to games". The partner either follows to the lobby or keeps the finished
+ * results on screen (after a one-frame flash of the lobby) until they tap "Back to games" too.
+ */
+async function bothBack(t, first) {
+  const other = first === t.a ? t.b : t.a;
+  await first.getByRole('button', { name: 'Back to games' }).first().click();
+  await first.locator('.game-grid').waitFor({ timeout: 10000 });
+  const deadline = Date.now() + 15000;
+  let inLobbySince = 0;
+  while (Date.now() < deadline) {
+    if (await other.locator('.game-grid').count()) {
+      inLobbySince ||= Date.now();
+      if (Date.now() - inLobbySince > 800) return;
+    } else {
+      inLobbySince = 0;
+      if (await other.locator('.away-banner').count()) await other.getByRole('button', { name: 'Back to games' }).first().click({ timeout: 2000 }).catch(() => {});
+    }
+    await other.waitForTimeout(100);
+  }
+  await t.shot(other, 'deeptalk-back-stuck');
+  throw new Error('partner never settled in the lobby');
+}
+
+/** The page that is not the authority (its actions travel over the channel to the other one). */
+async function followerOf(t) {
+  const ids = await t.a.evaluate(() => ({
+    a: JSON.parse(localStorage.getItem('samesky:a:clientId')),
+    b: JSON.parse(localStorage.getItem('samesky:b:clientId')),
+  }));
+  assert.ok(ids.a && ids.b && ids.a !== ids.b, JSON.stringify(ids));
+  return ids.a < ids.b ? { follower: t.b, leader: t.a } : { follower: t.a, leader: t.b };
+}
+
+/** Drop this page's outgoing "answer" actions (a flaky network), until `restore()`. */
+async function loseAnswers(page) {
+  await page.evaluate(() => {
+    const orig = BroadcastChannel.prototype.postMessage;
+    window.__restoreAnswers = () => {
+      BroadcastChannel.prototype.postMessage = orig;
+    };
+    BroadcastChannel.prototype.postMessage = function (msg) {
+      if (JSON.stringify(msg ?? null).includes('"type":"answer"')) return undefined; // lost on the way
+      return orig.call(this, msg);
+    };
+  });
+  return () => page.evaluate(() => window.__restoreAnswers());
+}
+
 test('Heart to Heart: flip, talk, write secretly, reveal, save, finish', { skip: !loadPlaywright() && 'playwright missing', timeout: 120000 }, async () => {
   const t = await openPair();
   const { a, b } = t;
@@ -116,9 +165,74 @@ test('Heart to Heart: flip, talk, write secretly, reveal, save, finish', { skip:
     await t.shot(b, 'deeptalk-done-b-360');
     await noHorizontalScroll(b);
 
-    await t.backToLobby(b);
+    await bothBack(t, b);
     await a.locator('.score-pill', { hasText: '2' }).waitFor();
     await b.locator('.score-pill', { hasText: '2' }).waitFor();
+    t.assertNoErrors();
+  } finally {
+    await t.close();
+  }
+});
+
+test('Heart to Heart: a lost "Seal it" keeps the written answer; leaving via ✕ keeps the night recap', { skip: !loadPlaywright() && 'playwright missing', timeout: 120000 }, async () => {
+  const t = await openPair({ viewport: { width: 360, height: 640 } });
+  const { a, b } = t;
+  try {
+    await t.startGame('deeptalk');
+    const { follower, leader } = await followerOf(t);
+    await leader.getByRole('button', { name: 'Flip the card ✨' }).click();
+    for (const p of [a, b]) await p.locator('.dt-card.is-flipped').waitFor();
+    const q = (await a.locator('.dt-q').innerText()).trim();
+    await leader.getByRole('button', { name: '✍️ Write it down' }).click();
+    for (const p of [a, b]) await p.getByRole('textbox', { name: 'Your answer' }).waitFor();
+
+    // Only spaces: the button stays off (the room would reject it anyway).
+    const box = follower.getByRole('textbox', { name: 'Your answer' });
+    await box.fill('    ');
+    assert.equal(await follower.getByRole('button', { name: 'Seal it 💌' }).isDisabled(), true);
+
+    // The follower's answer gets lost on the way: the words stay put, "Seal it" comes back.
+    const restore = await loseAnswers(follower);
+    const words = 'The way you hum when you cook, even on video';
+    await box.fill(words);
+    await follower.getByRole('button', { name: 'Seal it 💌' }).click();
+    await follower.getByRole('button', { name: 'Sealing…' }).waitFor();
+    await settle(follower, 400);
+    await t.shot(follower, 'deeptalk-sealing-360x640');
+    assert.equal(await box.inputValue(), words, 'text kept while the seal is in flight');
+    await follower.getByRole('button', { name: 'Seal it 💌' }).waitFor({ timeout: 8000 });
+    assert.equal(await box.inputValue(), words, 'text kept after the seal was lost');
+    assert.equal(await follower.getByText('💌 Your answer is sealed').count(), 0);
+    assert.equal(await leader.locator('.lock.is-locked').count(), 0, 'nothing sealed on the other screen either');
+    await follower.setViewportSize({ width: 390, height: 844 });
+    await settle(follower, 300);
+    await t.shot(follower, 'deeptalk-seal-lost-390x844');
+    await noHorizontalScroll(follower);
+
+    // Network back: the queued answer goes through on its own; nothing was typed twice.
+    await restore();
+    await follower.getByText('💌 Your answer is sealed').waitFor({ timeout: 8000 });
+    await leader.getByRole('textbox', { name: 'Your answer' }).fill('Your voice notes on the bus');
+    await leader.getByRole('button', { name: 'Seal it 💌' }).click();
+    for (const p of [a, b]) await p.locator('.dt-answer', { hasText: words }).waitFor();
+    await a.getByRole('button', { name: '☆ Save' }).click();
+    await b.getByRole('button', { name: '⭐ Saved' }).waitFor();
+
+    // Leave through ✕ (two taps) without "Finish for tonight": the recap keeps the conversation.
+    await b.getByRole('button', { name: 'Leave this game' }).click();
+    await b.getByRole('button', { name: 'Tap again to leave this game' }).click();
+    for (const p of [a, b]) await p.locator('.game-grid').waitFor({ timeout: 10000 });
+    await a.locator('.score-pill', { hasText: '1' }).waitFor();
+    await a.getByRole('button', { name: /Our night so far/ }).click();
+    const row = a.locator('.history li', { hasText: 'Heart to Heart' });
+    await row.waitFor();
+    const text = await row.innerText();
+    assert.match(text, /Shared 1 heart-to-heart card and (kept it light|got closer|went deep) · 1 saved ⭐/, text);
+    assert.ok(!/Ended early/.test(text));
+    assert.ok(q.length > 10);
+    await settle(a, 3500);
+    await t.shot(a, 'deeptalk-left-recap-360x640');
+    await noHorizontalScroll(a);
     t.assertNoErrors();
   } finally {
     await t.close();

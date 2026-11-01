@@ -193,25 +193,23 @@ function Picker({ q, sel, choose, lock, iAmSubject, subjectName }) {
   // authority never got (or rejected) doesn't eat what was typed. The Picker's key empties it for
   // a new question.
   return html`<div class="km-picker km-open">
-    <${AnswerBox} placeholder=${iAmSubject ? 'Your honest answer…' : `${subjectName} would say…`} maxLength=${MAX_ANSWER}
+    <${AnswerBox} placeholder=${iAmSubject ? 'Your honest answer…' : subjectName.length <= 12 ? `${subjectName} would say…` : 'Your guess…'} maxLength=${MAX_ANSWER}
       clearOnSubmit=${false} onSubmit=${(v) => lock(v)} />
   </div>`;
 }
 
 /**
- * One side of the reveal. `who` is the partner's name (null = mine → "Your answer"). A long name
- * is ellipsised on its own so "’s guess" always stays readable; the full label is the tooltip.
+ * One side of the reveal. `who` is the partner's name (null = mine → "Your answer"). The label
+ * wraps on a narrow card ("Christopher’s / answer") instead of being cut, so a long name and the
+ * "answer" / "guess" part are always readable.
  */
 function FlipCard({ player, who, role, value, tone = '', delay = 0 }) {
-  const label = who ? `${who}’s ${role}` : `Your ${role}`;
   return html`<div class=${`km-flip ${tone}`} style=${`--d:${delay}ms`}>
     <div class="km-flip-inner">
       <div class="km-face km-front">
-        <span class="km-face-label" title=${label}>
+        <span class="km-face-label">
           <${Avatar} player=${player} size="sm" />
-          ${who
-            ? html`<span class="km-face-who"><span class="km-face-name">${who}</span><span class="km-face-role">’s ${role}</span></span>`
-            : html`<span class="km-face-who"><span class="km-face-name">${label}</span></span>`}
+          <span class="km-face-who">${who ? `${who}’s ${role}` : `Your ${role}`}</span>
         </span>
         <b class="km-face-value">${value}</b>
       </div>

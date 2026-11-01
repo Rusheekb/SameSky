@@ -76,11 +76,30 @@ export async function openPair({ viewport = PHONE, names = ['Alex', 'Blair'] } =
     async shot(page, name) {
       await page.screenshot({ path: `${SHOTS}${name}.png` });
     },
-    /** Both pages back in the lobby. */
+    /**
+     * Both pages back in the lobby. `who` leaves first: via "Back to games" on a finished game,
+     * or the two-tap ✕ on a running one. The partner either lands in the lobby by itself
+     * (unfinished game) or keeps the finished results on screen and taps "Back to games" too.
+     */
     async backToLobby(who = a) {
-      await who.getByRole('button', { name: 'Back to games' }).first().click();
-      await a.locator('.game-grid').waitFor({ timeout: 10000 });
-      await b.locator('.game-grid').waitFor({ timeout: 10000 });
+      const other = who === a ? b : a;
+      const back = who.getByRole('button', { name: 'Back to games' }).first();
+      if (await back.isVisible().catch(() => false)) {
+        await back.click();
+      } else {
+        await who.getByRole('button', { name: 'Leave this game' }).click();
+        await who.getByRole('button', { name: 'Tap again to leave this game' }).click();
+      }
+      await who.locator('.game-grid').waitFor({ timeout: 10000 });
+      await other.waitForFunction(
+        () => document.querySelector('.game-grid') || /went back to the games/.test(document.querySelector('.room-main')?.textContent || ''),
+        null,
+        { timeout: 10000 },
+      );
+      if (!(await other.locator('.game-grid').count())) {
+        await other.getByRole('button', { name: 'Back to games' }).first().click();
+      }
+      await other.locator('.game-grid').waitFor({ timeout: 10000 });
     },
     assertNoErrors() {
       const real = errors.filter((e) => !/favicon|ERR_FILE_NOT_FOUND/.test(e));

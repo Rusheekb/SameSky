@@ -26,11 +26,17 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--pink);
+}
+.game.knowme .km-about .avatar,
+.game.knowme .km-tally-who .avatar {
+  flex: none;
 }
 .game.knowme .km-about .avatar-sm {
   width: 26px;
@@ -257,22 +263,11 @@
 .game.knowme .km-face-label .avatar {
   flex: none;
 }
-/* "<Name>’s guess": only the name gives way (ellipsis), "’s guess" always stays readable. */
+/* "<Name>’s guess" on a half-width card: wraps (even inside a long name) rather than being cut. */
 .game.knowme .km-face-who {
-  display: flex;
   min-width: 0;
-  white-space: nowrap;
-}
-.game.knowme .km-face-who,
-.game.knowme .km-face-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.game.knowme .km-face-name {
-  min-width: 2ch;
-}
-.game.knowme .km-face-role {
-  flex: none;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 .game.knowme .km-face-label .avatar-sm {
   width: 24px;
@@ -510,6 +505,10 @@
   font-weight: 700;
   line-height: 1.2;
   text-align: left;
+}
+.game.knowme .km-tally-who > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .game.knowme .km-tally-who .avatar-sm {
   width: 26px;

@@ -131,24 +131,36 @@ export function Room({ code, profile, config, onProfileChange }) {
 
   // When your partner closes a game, say so — and if it was finished, keep its results on your
   // screen (story keepsake, doodle gallery…) until you tap "Back to games" yourself.
+  // Derived during render (not in an effect) so the partner never sees a one-frame lobby flash.
   const lastGame = useRef(null);
-  const [kept, setKept] = useState(null);
-  useEffect(() => {
-    if (!st) return;
+  const keptRef = useRef(null);
+  const notice = useRef('');
+  const [, rerender] = useState(0);
+  if (st) {
     if (st.game) {
       lastGame.current = st.game;
-      if (kept) setKept(null);
-      return;
+      keptRef.current = null;
+    } else if (lastGame.current) {
+      const prev = lastGame.current;
+      lastGame.current = null;
+      const entry = st.history[st.history.length - 1];
+      if (entry && entry.by && entry.by !== session.id) {
+        notice.current = `${st.players[entry.by]?.name || 'Your partner'} went back to the games`;
+        if (prev.s?.done) keptRef.current = prev;
+      }
     }
-    const prev = lastGame.current;
-    lastGame.current = null;
-    if (!prev) return;
-    const entry = st.history[st.history.length - 1];
-    if (!entry || !entry.by || entry.by === session.id) return;
-    const name = st.players[entry.by]?.name || 'Your partner';
-    toast(`${name} went back to the games`);
-    if (prev.s?.done) setKept(prev);
-  }, [st?.game, st?.history.length]);
+  }
+  const kept = keptRef.current;
+  const setKept = (v) => {
+    keptRef.current = v;
+    rerender((n) => n + 1);
+  };
+  useEffect(() => {
+    if (notice.current) {
+      toast(notice.current);
+      notice.current = '';
+    }
+  });
 
   if (!session) {
     return html`<main class="screen center"><div class="loader">🌙</div><p class="muted">Opening your room…</p></main>`;
@@ -632,7 +644,7 @@ function Recap({ session, config, code, onClose }) {
   return html`<div class="sheet-backdrop" onClick=${(e) => e.target === e.currentTarget && onClose()}>
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Our night so far" ref=${sheet} tabIndex="-1">
       <div class="row between"><h2>🌌 Our night so far</h2><button class="btn btn-ghost btn-sm" onClick=${onClose} aria-label="Close">✕</button></div>
-      <div class="score-big"><b>${st.scores.together}</b> together points · ${st.scores.games} game${st.scores.games === 1 ? '' : 's'}</div>
+      <div class="score-big"><b>${st.scores.together}</b> together point${st.scores.together === 1 ? '' : 's'} · ${st.scores.games} game${st.scores.games === 1 ? '' : 's'}</div>
       ${st.history.length === 0
         ? html`<p class="muted">Nothing yet — go play something! 🎲</p>`
         : html`<ul class="history">${st.history

@@ -17,6 +17,37 @@ async function roundChip(page, n) {
   await page.locator('.game-header .tot-round', { hasText: new RegExp(`^${n}/10$`) }).waitFor({ timeout: 10000 });
 }
 
+/**
+ * `first` taps "Back to games". The partner either follows to the lobby or keeps the finished
+ * results on screen (after a one-frame flash of the lobby) until they tap "Back to games" too.
+ */
+async function bothBack(t, first) {
+  const other = first === t.a ? t.b : t.a;
+  await first.getByRole('button', { name: 'Back to games' }).first().click();
+  await first.locator('.game-grid').waitFor({ timeout: 10000 });
+  const deadline = Date.now() + 15000;
+  let inLobbySince = 0;
+  while (Date.now() < deadline) {
+    if (await other.locator('.game-grid').count()) {
+      inLobbySince ||= Date.now();
+      if (Date.now() - inLobbySince > 800) return;
+    } else {
+      inLobbySince = 0;
+      if (await other.locator('.away-banner').count()) await other.getByRole('button', { name: 'Back to games' }).first().click({ timeout: 2000 }).catch(() => {});
+    }
+    await other.waitForTimeout(100);
+  }
+  await t.shot(other, 'thisorthat-back-stuck');
+  throw new Error('partner never settled in the lobby');
+}
+
+/** Leave a running game through the header ✕ (two taps). */
+async function leaveViaX(t, who) {
+  await who.getByRole('button', { name: 'Leave this game' }).click();
+  await who.getByRole('button', { name: 'Tap again to leave this game' }).click();
+  for (const p of [t.a, t.b]) await p.locator('.game-grid').waitFor({ timeout: 10000 });
+}
+
 test('This or That: pick, predict, reveal, auto-advance, results', { skip: !loadPlaywright() && 'playwright missing', timeout: 180000 }, async () => {
   const t = await openPair();
   const { a, b } = t;
@@ -119,9 +150,52 @@ test('This or That: pick, predict, reveal, auto-advance, results', { skip: !load
     await a.locator('.tot-talk').scrollIntoViewIfNeeded();
     await t.shot(a, 'thisorthat-over-talk-a');
 
-    await t.backToLobby(b);
+    await bothBack(t, b);
     await a.locator('.score-pill', { hasText: '25' }).waitFor();
     await b.locator('.score-pill', { hasText: '25' }).waitFor();
+    t.assertNoErrors();
+  } finally {
+    await t.close();
+  }
+});
+
+test('This or That: leaving through ✕ mid-game keeps the running result in "Our night so far"', { skip: !loadPlaywright() && 'playwright missing', timeout: 120000 }, async () => {
+  const t = await openPair({ viewport: { width: 360, height: 640 } });
+  const { a, b } = t;
+  try {
+    await t.startGame('thisorthat');
+    // Round 1: same pick, both read each other (+3). Round 2: split, nobody right (+0).
+    const plays = [
+      [['a', 'a'], ['a', 'a']],
+      [['a', 'a'], ['b', 'b']],
+    ];
+    for (let r = 1; r <= plays.length; r++) {
+      await roundChip(a, r);
+      await roundChip(b, r);
+      const [[ma, ga], [mb, gb]] = plays[r - 1];
+      await tap(a, 'mine', ma);
+      await tap(a, 'guess', ga);
+      await tap(b, 'mine', mb);
+      await tap(b, 'guess', gb);
+      for (const p of [a, b]) await p.locator('.tot-rcard').nth(1).waitFor();
+      if (r < plays.length) await a.getByRole('button', { name: /Next dilemma/ }).click();
+    }
+    await leaveViaX(t, b);
+    await a.locator('.score-pill', { hasText: '3' }).waitFor();
+
+    await a.getByRole('button', { name: /Our night so far/ }).click();
+    const row = a.locator('.history li', { hasText: 'This or That' });
+    await row.waitFor();
+    const text = await row.innerText();
+    assert.match(text, /50% in tune after 2 of 10 · Alex read 1\/2, Blair read 1\/2/, text);
+    assert.ok(!/Ended early/.test(text), 'not just "Ended early"');
+    await settle(a, 3500); // let the toast and the last reveal's hearts clear for the shot
+    await t.shot(a, 'thisorthat-left-recap-360x640');
+    await noHorizontalScroll(a);
+    await a.setViewportSize({ width: 390, height: 844 });
+    await settle(a, 400);
+    await t.shot(a, 'thisorthat-left-recap-390x844');
+    await noHorizontalScroll(a);
     t.assertNoErrors();
   } finally {
     await t.close();
