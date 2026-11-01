@@ -4,14 +4,48 @@
 .game.doodle .round {
   gap: 12px;
 }
-/* Board + toolbar fit above the reaction bar on a phone (≈404px of other UI around a 4:3 board). */
+/* Board + toolbar fit above the reaction bar on a phone (≈404px of other UI around a 4:3 board).
+   With the one-row toolbar of a wider screen, the guesses (and the drawer's Skip in their header)
+   must clear the fixed reaction bar too, e.g. on a 1280×800 laptop. */
+.game.doodle {
+  --doodle-chrome: 404px;
+}
+@media (min-width: 680px) {
+  .game.doodle {
+    --doodle-chrome: 460px;
+  }
+}
 .game.doodle .drawboard,
 .game.doodle .word-bar,
 .game.doodle .guesses,
 .game.doodle .round > .answer-box {
-  width: min(100%, 640px, max(260px, calc((100dvh - 404px) * 4 / 3)));
+  width: min(100%, 640px, max(260px, calc((100dvh - var(--doodle-chrome)) * 4 / 3)));
   margin-left: auto;
   margin-right: auto;
+}
+
+/* "So close!" pops up over the top of the board while the round is being drawn. */
+.game.doodle .close-pop {
+  /* Centred without transforms: .pop-in animates `transform`. */
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  margin: 0 auto;
+  z-index: 3;
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #2a2148;
+  font-weight: 900;
+  font-size: 0.92rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow:
+    0 0 0 3px rgba(255, 212, 121, 0.35),
+    0 8px 22px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 
 .game.doodle .choose .options {
@@ -136,7 +170,9 @@
 }
 .game.doodle .guesses-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 8px;
 }
 .game.doodle .guesses-head small:first-child {
@@ -179,8 +215,17 @@
 .game.doodle .empty-guesses {
   margin: 0;
 }
+.game.doodle .guesses-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
 .game.doodle .skip-btn {
-  align-self: center;
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
 }
 .game.doodle .skip-btn.armed {
   background: rgba(255, 107, 129, 0.2);

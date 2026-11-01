@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as story from '../../js/games/story/logic.js';
 import { OPENINGS, TWISTS, END_TITLES, EPILOGUES } from '../../js/content/story.js';
+import { readFileSync } from 'node:fs';
 import { gameHarness, makePair } from '../helpers/sim.js';
 import { seededRandom } from '../../js/lib/util.js';
 
@@ -124,7 +125,8 @@ test('happy path: alternate lines, twist, The End, title, keepsake + recap field
   assert.deepEqual(h.s.lines, [{ by: 'p1', text: 'The baker turned around and gasped.' }]);
   assert.equal(h.s.turn, 'p2');
   assert.equal(h.s.points, 1);
-  assert.match(h.s.summary, /1 line in/);
+  assert.equal(h.s.summary, '', 'the recap line for leaving mid-story comes from summarize()');
+  assert.match(story.summarize(h.s).summary, /1 line, unfinished$/);
 
   h.act('p2', { type: 'line', text: 'A tiny dragon was eating the cinnamon roll.' });
   assert.equal(h.s.turn, 'p1');
@@ -537,4 +539,301 @@ test('a story over the real session: simultaneous twist + end taps apply once', 
   assert.equal(a.state.scores.together, 6 + FINISH_POINTS);
   assert.match(a.state.history[0].summary, /The Sock Odyssey/);
   assert.equal(a.state.history[0].highlights.length, 1);
+});
+
+// ------------------------------------------------------------------ lost / raced lines (realtime#1)
+
+test('a line carries its slot: a re-sent or crossed line lands once, in the slot it was written for', () => {
+  const h = gameHarness(story);
+  const line = { type: 'line', text: 'The kettle began to hum a lullaby.', slot: 0 };
+  h.act('p1', line);
+  assert.equal(h.s.lines.length, 1);
+  const one = h.s;
+  h.act('p1', line); // the same line re-sent ("Send again" after a lost message)
+  assert.equal(h.s, one);
+  h.act('p2', { type: 'line', text: 'The cat joined in, badly.', slot: 1 });
+  assert.equal(h.s.turn, 'p1');
+  const two = h.s;
+  // p1's first line arriving again much later, when it is p1's turn once more: still ignored.
+  h.act('p1', line);
+  assert.equal(h.s, two, 'stale slot ignored even on the right turn');
+  h.act('p1', { ...line, slot: 'x' });
+  assert.equal(h.s, two, 'junk slot ignored');
+  // A twist does not move the slot (it is not a player line).
+  h.act('p2', { type: 'twist' });
+  h.act('p1', { type: 'line', text: 'Then the lights went out.', slot: 2 });
+  assert.equal(story.playerLines(h.s.lines), 3);
+  // Lines without a slot (older clients) still work.
+  h.act('p2', { type: 'line', text: 'Somebody giggled in the dark.' });
+  assert.equal(story.playerLines(h.s.lines), 4);
+});
+
+test('reconcileDraft: the box empties only once the story shows the line', () => {
+  const h = gameHarness(story);
+  let d = story.reconcileDraft(null, h.s, 'p1');
+  assert.deepEqual(d, { story: 1, text: '', sent: null, restored: false });
+  assert.equal(story.reconcileDraft(d, h.s, 'p1'), d, 'same object when nothing changes');
+
+  // Typed, sent, not there yet: kept as is.
+  d = { ...d, text: '  The kettle   began to hum. ', sent: { from: 0, texts: ['The kettle began to hum.'], at: 1 } };
+  assert.equal(story.reconcileDraft(d, h.s, 'p1'), d);
+  // The partner's twist in between does not count as our line.
+  h.act('p1', { type: 'line', text: 'Something else entirely.' });
+  h.act('p2', { type: 'line', text: 'Then it hummed.' });
+  const other = story.reconcileDraft({ ...d, sent: { ...d.sent, from: 2 } }, h.s, 'p1');
+  assert.ok(other.sent, 'not landed while the story only has other lines');
+
+  // Landed (matched by author + cleaned text, from the line count at sending): emptied.
+  const g = gameHarness(story);
+  g.act('p1', { type: 'line', text: 'The kettle began to hum.', slot: 0 });
+  const landed = story.reconcileDraft(d, g.s, 'p1');
+  assert.deepEqual(landed, { story: 1, text: '', sent: null, restored: false });
+  // Something new typed after the last send is never thrown away.
+  const typed = story.reconcileDraft({ ...d, text: 'And then a second thought' }, g.s, 'p1');
+  assert.equal(typed.text, 'And then a second thought');
+  assert.equal(typed.sent, null);
+  // An edited "Send again" version that lost to the original: the box still empties.
+  const edited = story.reconcileDraft({ ...d, text: 'The kettle began to hum!', sent: { ...d.sent, texts: ['The kettle began to hum.', 'The kettle began to hum!'] } }, g.s, 'p1');
+  assert.equal(edited.text, '');
+  // The same words written earlier in the story don't count.
+  const early = story.reconcileDraft({ ...d, sent: { ...d.sent, from: 1 } }, g.s, 'p1');
+  assert.equal(early.text, d.text);
+  assert.equal(early.restored, true, 'turn moved on without it → offered again');
+  // A different player's line with the same words is not ours.
+  assert.notEqual(story.reconcileDraft(d, g.s, 'p2').text, '');
+
+  // A new story starts with an empty box.
+  const s2 = { ...g.s, story: 2 };
+  assert.deepEqual(story.reconcileDraft(landed, s2, 'p1'), { story: 2, text: '', sent: null, restored: false });
+});
+
+test('reconcileDraft: a line that loses the race with "The End" comes back after "Keep writing"', () => {
+  const h = gameHarness(story);
+  write(h, MIN_LINES + 1); // p1,p2,…,p1 → p2's turn
+  assert.equal(h.s.turn, 'p2');
+  const text = 'Blair spent a whole minute crafting this sentence.';
+  let d = story.reconcileDraft(null, h.s, 'p2');
+  d = { ...d, text, sent: { from: h.s.lines.length, texts: [text], at: 1 } };
+  // p1 taps The End first; p2's line arrives right after and is rejected.
+  h.act('p1', { type: 'end' });
+  const ending = h.s;
+  h.act('p2', { type: 'line', text, slot: MIN_LINES + 1 });
+  assert.equal(h.s, ending, 'line rejected while ending');
+  d = story.reconcileDraft(d, h.s, 'p2');
+  assert.deepEqual(d, { story: 1, text, sent: null, restored: true });
+  assert.equal(story.reconcileDraft(d, h.s, 'p2'), d);
+  h.act('p1', { type: 'resume' });
+  d = story.reconcileDraft(d, h.s, 'p2');
+  assert.equal(d.text, text, 'still in the box when the composer comes back');
+  assert.equal(d.restored, true);
+  h.act('p2', { type: 'line', text, slot: story.playerLines(h.s.lines) });
+  assert.equal(h.s.lines.at(-1).text, text);
+});
+
+test('over the real session: a dropped line, "Send again", and a line racing "The End"', async () => {
+  const { a, b, time, hub } = await makePair();
+  a.dispatch({ type: 'startGame', id: 'story' });
+  time.flush();
+  const g = () => a.state.game.s;
+  const line = (who, text) => who.dispatch({ type: 'game', a: { type: 'line', text, slot: story.playerLines(who.state.game.s.lines) } });
+  for (let i = 0; i < MIN_LINES + 1; i++) {
+    line(g().turn === 'aaa' ? a : b, `Line number ${i + 1}.`);
+    time.flush();
+  }
+  assert.equal(g().turn, 'bbb');
+  assert.ok(a.isAuthority(), 'a leads (smaller id), b sends its actions over the network');
+
+  // 1) b's line is dropped on the way (twice), b taps "Send again": it lands exactly once.
+  let dropping = true;
+  hub.filter = (from, msg) => !(dropping && from === 'bbb' && msg.t === 'action' && msg.action?.a?.type === 'line');
+  const text = 'Blair spent a whole minute crafting this sentence.';
+  let d = { ...story.reconcileDraft(null, b.state.game.s, 'bbb'), text };
+  d = { ...d, sent: { from: g().lines.length, texts: [text], at: 1 } };
+  line(b, text);
+  time.flush();
+  assert.equal(g().lines.length, MIN_LINES + 1, 'lost on the way');
+  assert.ok(story.reconcileDraft(d, b.state.game.s, 'bbb').sent, 'b still waits with its text');
+  line(b, text); // "Send again"
+  dropping = false;
+  time.advance(4000); // the session re-sends both pending copies
+  assert.equal(g().lines.filter((l) => l.text === text).length, 1, 'landed once');
+  assert.deepEqual(a.state.game.s, b.state.game.s);
+  assert.equal(story.reconcileDraft(d, b.state.game.s, 'bbb').text, '', 'b’s box empties once it shows up');
+
+  // 2) a writes, then b's next line crosses a's "The End".
+  line(a, 'Alex adds one more.');
+  time.flush();
+  assert.equal(g().turn, 'bbb');
+  dropping = true;
+  const text2 = 'And Blair’s line arrived a moment too late.';
+  d = { ...story.reconcileDraft(d, b.state.game.s, 'bbb'), text: text2 };
+  d = { ...d, sent: { from: b.state.game.s.lines.length, texts: [text2], at: 2 } };
+  line(b, text2);
+  a.dispatch({ type: 'game', a: { type: 'end', ai: false } });
+  time.flush();
+  dropping = false;
+  time.advance(4000);
+  assert.equal(g().phase, 'ending');
+  assert.ok(!g().lines.some((l) => l.text === text2), 'rejected: the book had ended');
+  d = story.reconcileDraft(d, b.state.game.s, 'bbb');
+  assert.equal(d.restored, true);
+  // "Keep writing": b's composer comes back with the line in it, and it can still be added.
+  b.dispatch({ type: 'game', a: { type: 'resume' } });
+  time.flush();
+  d = story.reconcileDraft(d, b.state.game.s, 'bbb');
+  assert.equal(d.text, text2);
+  assert.equal(b.state.game.s.turn, 'bbb');
+  d = { ...d, restored: false, sent: { from: b.state.game.s.lines.length, texts: [text2], at: 3 } };
+  line(b, text2);
+  time.advance(2000);
+  assert.equal(g().lines.filter((l) => l.text === text2).length, 1);
+  assert.equal(story.reconcileDraft(d, b.state.game.s, 'bbb').text, '');
+  assert.deepEqual(a.state, b.state);
+});
+
+// ------------------------------------------------------------------ narrator timing
+
+test('the narrator fallback waits longer than the AI client gives up', () => {
+  const ai = readFileSync(new URL('../../js/lib/ai.js', import.meta.url), 'utf8');
+  const timeout = Number(ai.match(/timeoutMs = (\d+)/)?.[1]);
+  assert.ok(timeout > 0, 'found the AI client timeout');
+  assert.ok(NARRATOR_WAIT >= timeout + 5000, `fallback ${NARRATOR_WAIT} ms vs AI timeout ${timeout} ms`);
+});
+
+test('narrate: binds while awaited; a late reply becomes the first idea + the closing line', () => {
+  // Awaited: binds the book with the narrator's title and epilogue.
+  const h = gameHarness(story);
+  write(h, MIN_LINES);
+  h.act('p1', { type: 'end', ai: true });
+  const at = h.s.ending.at;
+  const pending = h.s;
+  h.act('p1', { type: 'narrate', at: at - 1, title: 'Wrong ending', epilogue: 'Nope.' });
+  assert.equal(h.s, pending, 'a reply for another ending is ignored');
+  h.act('p1', { type: 'narrate', title: 'No at', epilogue: 'Nope.' });
+  assert.equal(h.s, pending);
+  h.act('p1', { type: 'narrate', at, title: '“The Singing Rose”', epilogue: 'And the garden hummed along.' });
+  assert.equal(h.s.phase, 'final');
+  assert.equal(h.s.book.title, 'The Singing Rose');
+  assert.equal(h.s.book.epilogue, 'And the garden hummed along.');
+
+  // "We'll name it ourselves" first, then the narrator answers: nothing is snatched away.
+  const g = gameHarness(story);
+  write(g, MIN_LINES);
+  g.act('p2', { type: 'end', ai: true });
+  const at2 = g.s.ending.at;
+  g.act('p1', { type: 'manual', at: at2 });
+  assert.equal(g.s.ending.narrator, 'off');
+  const first = g.s.ending.suggest;
+  g.act('p2', { type: 'narrate', at: at2, title: '  **The Singing Rose** ', epilogue: '  And   the garden hummed along. ' });
+  assert.equal(g.s.phase, 'ending', 'still choosing a title');
+  assert.equal(g.s.ending.narrator, 'late');
+  assert.equal(g.s.ending.pick, 'The Singing Rose');
+  assert.deepEqual(g.s.ending.suggest, ['The Singing Rose', ...first.slice(0, 3)]);
+  assert.equal(g.s.ending.epilogue, 'And the garden hummed along.');
+  const late = g.s;
+  g.act('p2', { type: 'narrate', at: at2, title: 'Second reply', epilogue: 'x y z' });
+  assert.equal(g.s, late, 'only once');
+  g.act('p1', { type: 'manual', at: at2 });
+  assert.equal(g.s, late);
+  assert.equal(g.tick(NARRATOR_WAIT * 2), late, 'tick leaves it alone');
+  // Binding with their own title keeps the narrator's closing line.
+  g.act('p1', { type: 'finish', title: 'Our Own Title' });
+  assert.equal(g.s.book.title, 'Our Own Title');
+  assert.equal(g.s.book.epilogue, 'And the garden hummed along.');
+
+  // Unusable late reply: nothing changes. Title-only reply: bank epilogue when bound.
+  const k = gameHarness(story);
+  write(k, MIN_LINES);
+  k.act('p1', { type: 'end', ai: true });
+  const at3 = k.s.ending.at;
+  k.tick(NARRATOR_WAIT);
+  assert.equal(k.s.ending.narrator, 'off');
+  const off = k.s;
+  k.act('p1', { type: 'narrate', at: at3, title: { bad: 1 }, epilogue: '!!!' });
+  assert.equal(k.s, off);
+  k.act('p1', { type: 'narrate', at: at3, title: 'Just a Title' });
+  assert.equal(k.s.ending.suggest[0], 'Just a Title');
+  k.act('p2', { type: 'finish', title: 'Just a Title' });
+  assert.ok(EPILOGUES.map((e) => e.replaceAll('{A}', 'Alex').replaceAll('{B}', 'Blair')).includes(k.s.book.epilogue));
+
+  // Keep writing, then The End again: the old call's reply and "manual" are stale.
+  const m = gameHarness(story);
+  write(m, MIN_LINES);
+  m.act('p1', { type: 'end', ai: true });
+  const old = m.s.ending.at;
+  m.act('p2', { type: 'resume' });
+  m.act('p1', { type: 'narrate', at: old, title: 'Too late', epilogue: 'The end.' });
+  assert.equal(m.s.phase, 'writing');
+  write(m, 1);
+  m.now += 1000;
+  m.act('p2', { type: 'end', ai: true });
+  const fresh = m.s;
+  m.act('p1', { type: 'manual', at: old });
+  assert.equal(m.s, fresh, 'a stale "manual" does not cancel the new narrator');
+  m.act('p1', { type: 'narrate', at: old, title: 'Too late', epilogue: 'The end.' });
+  assert.equal(m.s, fresh);
+  m.act('p1', { type: 'manual', at: fresh.ending.at });
+  assert.equal(m.s.ending.narrator, 'off');
+});
+
+// ------------------------------------------------------------------ leaving mid-story (rules#2)
+
+test('summarize: leaving mid-story keeps the title, line count and a memorable line', () => {
+  const h = gameHarness(story);
+  assert.deepEqual(story.summarize(h.s), { summary: `Opened “${h.s.title}” — left before the first line`, highlights: [] });
+  h.act('p1', { type: 'line', text: 'Short one.' });
+  h.act('p2', { type: 'line', text: 'A very small dragon climbed out of the oven with flour on its nose.' });
+  h.act('p1', { type: 'twist' });
+  h.act('p1', { type: 'line', text: 'Medium sized line here.' });
+  const before = structuredClone(h.s);
+  const sum = story.summarize(h.s);
+  assert.deepEqual(h.s, before, 'pure');
+  assert.equal(sum.summary, `Started “${h.s.title}” together — 3 lines, 1 twist, unfinished`);
+  assert.deepEqual(sum.highlights, [`“${h.s.title}” (unfinished): A very small dragon climbed out of the oven with flour on its nose.`]);
+
+  write(h, 3);
+  h.act('p2', { type: 'end' });
+  assert.match(story.summarize(h.s).summary, /— 6 lines, 1 twist, not named yet$/);
+
+  // Bound: the book's own recap. Then "Write another" with nothing written: still that recap.
+  h.act('p1', { type: 'finish', title: 'Kevin' });
+  assert.deepEqual(story.summarize(h.s), { summary: h.s.summary, highlights: h.s.highlights });
+  h.act('p2', { type: 'again' });
+  assert.deepEqual(story.summarize(h.s), { summary: 'Wrote “Kevin” together (6 lines, 1 twist)', highlights: h.s.highlights });
+  // …and with a few lines of story two, both are there.
+  write(h, 2);
+  const two = story.summarize(h.s);
+  assert.equal(two.summary, `Wrote “Kevin” together (6 lines, 1 twist) · then started “${h.s.title}” (2 lines, unfinished)`);
+  assert.equal(two.highlights.length, 2);
+  assert.match(two.highlights[0], /^“Kevin”: /);
+  assert.match(two.highlights[1], /\(unfinished\): Line \d/);
+  for (const x of two.highlights) assert.ok(x.length <= 190);
+
+  // Highlights stay ≤ 6; junk state is handled.
+  const many = { ...h.s, highlights: ['1', '2', '3', '4', '5', '6'] };
+  assert.equal(story.summarize(many).highlights.length, 6);
+  assert.equal(story.summarize(many).highlights[5].includes('(unfinished)'), true);
+  assert.deepEqual(story.summarize(null), {});
+  assert.deepEqual(story.summarize({ lines: 'x' }), {});
+});
+
+test('leaving through ✕ mid-story records the story in the night recap (not "Ended early")', async () => {
+  const { a, b, time } = await makePair();
+  a.dispatch({ type: 'startGame', id: 'story' });
+  time.flush();
+  const title = a.state.game.s.title;
+  const lines = ['Once there was a sock.', 'It dreamed of seeing the ocean one day, past the laundry basket.', 'So it packed.'];
+  for (const text of lines) {
+    const w = a.state.game.s.turn === 'aaa' ? a : b;
+    w.dispatch({ type: 'game', a: { type: 'line', text } });
+    time.flush();
+  }
+  b.dispatch({ type: 'endGame' });
+  time.flush();
+  const entry = a.state.history.at(-1);
+  assert.equal(entry.id, 'story');
+  assert.equal(entry.summary, `Started “${title}” together — 3 lines, unfinished`);
+  assert.deepEqual(entry.highlights, [`“${title}” (unfinished): ${lines[1]}`]);
+  assert.equal(entry.points, 3);
+  assert.deepEqual(a.state, b.state);
 });

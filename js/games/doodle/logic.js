@@ -230,8 +230,13 @@ function advance(s, ctx) {
   };
 }
 
+/**
+ * Actions may carry the `round` they were made in; one that arrives late (after a reconnect) or
+ * loses a race (both tap "Next round") is then ignored instead of hitting a later round.
+ */
 export function reduce(s, a, ctx) {
   if (!a || !ctx.players.includes(a.by)) return s;
+  if (a.round !== undefined && a.round !== s.round) return s;
   switch (a.type) {
     case 'choose': {
       if (s.phase !== 'choose' || a.by !== s.drawer) return s;

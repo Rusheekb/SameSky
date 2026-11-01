@@ -7,6 +7,10 @@
 // (AI) can write the title + epilogue, or the two of you pick a title. The finished story is shown
 // as a keepsake page.
 //
+// Actions can arrive late (a re-send after a dropped message) or cross the partner's move, so they
+// say what they refer to: a line carries its `slot` (player lines the writer could see), the
+// narrator's ending and "We'll name it ourselves" carry the ending's `at`. Stale ones are ignored.
+//
 // Pure + deterministic: no DOM, no Date.now(), no Math.random() — only ctx.now / ctx.random.
 
 import { OPENINGS, TWISTS, END_TITLES, EPILOGUES } from '../../content/story.js';
@@ -19,7 +23,11 @@ export const MIN_LINES = 6; // player lines before "The End" unlocks
 export const MAX_LINES = 24; // hard cap: the book is full
 export const LINE_POINTS_CAP = 12; // +1 per player line, up to this many per story
 export const FINISH_POINTS = 2;
-export const NARRATOR_WAIT = 30000; // ms before a pending AI ending falls back to "name it yourselves"
+// ms before a pending AI ending falls back to "name it yourselves". Longer than the AI client's own
+// timeout (45 s, js/lib/ai.js), so the narrator's call always settles first while it is pending: it
+// either binds the book or (failed/timed out) switches to the title form itself. This fallback is
+// for when the presser drops off; either of you can also tap "We'll name it ourselves" any time.
+export const NARRATOR_WAIT = 50000;
 export const MAX_TITLE = 60;
 export const MAX_OPENING = 300;
 export const MAX_EPILOGUE = 280;
@@ -60,6 +68,12 @@ function unquote(t) {
 }
 
 export const playerLines = (lines) => lines.filter((l) => !l.twist).length;
+
+/** A player line exactly as the reducer stores it (the view sends and matches the same text). */
+export const cleanLine = (text) => cleanText(text, MAX_LINE);
+
+const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+const statsOf = (count, twists) => `${plural(count, 'line')}${twists ? `, ${plural(twists, 'twist')}` : ''}`;
 
 function nameOf(ctx, i) {
   return ctx.names?.[ctx.players?.[i]] || (i === 0 ? 'Alex' : 'Sam');
@@ -120,7 +134,9 @@ function fresh(ctx, start, carry = CARRY0) {
     // Turns alternate; the first story starts with players[0], later stories take turns starting.
     turn: ctx.players[carry.plays % 2] || ctx.players[0],
     twists: 0,
-    ending: null, // { by, at, auto, narrator: 'pending' | 'off', suggest: string[] }
+    // { by, at, auto, narrator: 'pending' | 'off' | 'late', suggest: string[] } + once the narrator's
+    // reply arrived late: { pick: its title ('' if none), epilogue }
+    ending: null,
     book: null, // { title, epilogue, at, by } once finished
     seenO,
     seenT: carry.seenT,
@@ -137,6 +153,36 @@ export function init(ctx, opts = {}) {
   return fresh(ctx, validStart(opts.content) || pickOpening(ctx, []));
 }
 
+/** An action that names an ending (`at`) which is no longer the current one is stale. */
+const staleEnding = (s, a) => a.at != null && a.at !== s.ending?.at;
+
+/** Bind the book: title (typed / narrator / working title), epilogue, points and the recap. */
+function bind(s, ctx, a) {
+  const typed = unquote(clip(a.title, MAX_TITLE));
+  const title = hasWords(typed) ? typed : s.title;
+  const epi = clip(a.epilogue, MAX_EPILOGUE);
+  const kept = s.ending?.epilogue; // the narrator's epilogue that arrived after you took over
+  const epilogue = hasWords(epi) ? epi : hasWords(kept) ? kept : fillNames(pick(EPILOGUES, ctx.random), ctx);
+  const plays = s.plays + 1;
+  const stats = statsOf(playerLines(s.lines), s.twists);
+  const summary =
+    plays > 1 ? `Wrote ${plays} stories together — latest: “${title}” (${stats})` : `Wrote “${title}” together (${stats})`;
+  const best = memorableLine(s.lines);
+  const highlight = clip(best ? `“${title}”: ${best}` : `“${title}”`, 190);
+  return {
+    ...s,
+    phase: 'final',
+    ending: null,
+    book: { title, epilogue, at: ctx.now, by: a.by },
+    done: true,
+    plays,
+    gained: s.gained + FINISH_POINTS,
+    points: s.points + FINISH_POINTS,
+    summary,
+    highlights: [...s.highlights, highlight].slice(-6),
+  };
+}
+
 function toEnding(s, ctx, by, ai, auto) {
   const suggest = [s.title, ...sample(END_TITLES.filter((t) => t !== s.title), 3, ctx.random)];
   return { ...s, phase: 'ending', ending: { by, at: ctx.now, auto, narrator: ai ? 'pending' : 'off', suggest } };
@@ -147,7 +193,10 @@ export function reduce(s, a, ctx) {
   switch (a.type) {
     case 'line': {
       if (s.phase !== 'writing' || a.by !== s.turn || typeof a.text !== 'string') return s;
-      const text = cleanText(a.text, MAX_LINE);
+      // `slot` = how many player lines the writer could see. A line that is re-sent ("Send again"
+      // after a lost message) only lands in the slot it was written for, so it never lands twice.
+      if (a.slot != null && a.slot !== playerLines(s.lines)) return s;
+      const text = cleanLine(a.text);
       if (!hasWords(text)) return s;
       const lines = [...s.lines, { by: a.by, text }];
       const count = playerLines(lines);
@@ -158,8 +207,6 @@ export function reduce(s, a, ctx) {
         turn: ctx.players.find((id) => id !== a.by) || a.by,
         gained: s.gained + pts,
         points: s.points + pts,
-        // Recap line if they leave before finishing the first story.
-        summary: s.plays ? s.summary : `Started “${s.title}” together — ${count} line${count === 1 ? '' : 's'} in`,
       };
       return count >= MAX_LINES ? toEnding(next, ctx, a.by, !!ctx.settings?.ai, true) : next;
     }
@@ -194,36 +241,29 @@ export function reduce(s, a, ctx) {
 
     case 'manual': {
       // The narrator (AI) failed / was skipped: show the title form to both.
-      if (s.phase !== 'ending' || s.ending?.narrator !== 'pending') return s;
+      if (s.phase !== 'ending' || s.ending?.narrator !== 'pending' || staleEnding(s, a)) return s;
       return { ...s, ending: { ...s.ending, narrator: 'off' } };
+    }
+
+    case 'narrate': {
+      // The narrator's (AI) title + epilogue for THIS ending (`at`). While it's awaited it binds the
+      // book. If you already chose to name it yourselves (or it came back too late), it doesn't
+      // snatch the title form away: its title becomes the first suggestion, and its epilogue closes
+      // the book whichever title you bind.
+      if (s.phase !== 'ending' || !s.ending || a.at !== s.ending.at) return s;
+      if (s.ending.narrator === 'pending') return bind(s, ctx, a);
+      if (s.ending.narrator !== 'off') return s; // already arrived once
+      const title = unquote(clip(a.title, MAX_TITLE));
+      const epilogue = clip(a.epilogue, MAX_EPILOGUE);
+      if (!hasWords(title) && !hasWords(epilogue)) return s;
+      const aiTitle = hasWords(title) ? title : '';
+      const suggest = aiTitle ? [aiTitle, ...s.ending.suggest.filter((t) => t !== aiTitle)].slice(0, 4) : s.ending.suggest;
+      return { ...s, ending: { ...s.ending, narrator: 'late', suggest, pick: aiTitle, epilogue: hasWords(epilogue) ? epilogue : '' } };
     }
 
     case 'finish': {
       if (s.phase !== 'ending') return s;
-      const typed = unquote(clip(a.title, MAX_TITLE));
-      const title = hasWords(typed) ? typed : s.title;
-      const epi = clip(a.epilogue, MAX_EPILOGUE);
-      const epilogue = hasWords(epi) ? epi : fillNames(pick(EPILOGUES, ctx.random), ctx);
-      const count = playerLines(s.lines);
-      const plays = s.plays + 1;
-      const twistTxt = s.twists ? `, ${s.twists} twist${s.twists === 1 ? '' : 's'}` : '';
-      const stats = `${count} line${count === 1 ? '' : 's'}${twistTxt}`;
-      const summary =
-        plays > 1 ? `Wrote ${plays} stories together — latest: “${title}” (${stats})` : `Wrote “${title}” together (${stats})`;
-      const best = memorableLine(s.lines);
-      const highlight = clip(best ? `“${title}”: ${best}` : `“${title}”`, 190);
-      return {
-        ...s,
-        phase: 'final',
-        ending: null,
-        book: { title, epilogue, at: ctx.now, by: a.by },
-        done: true,
-        plays,
-        gained: s.gained + FINISH_POINTS,
-        points: s.points + FINISH_POINTS,
-        summary,
-        highlights: [...s.highlights, highlight].slice(-6),
-      };
+      return bind(s, ctx, a);
     }
 
     case 'again': {
@@ -242,6 +282,54 @@ export function tick(s, ctx) {
     return { ...s, ending: { ...s.ending, narrator: 'off' } };
   }
   return s;
+}
+
+/**
+ * Recap entry when you leave through ✕ mid-story (core/state.js finishGame). A bound book already
+ * has its summary + highlight; a story in progress adds its title, line count and the most
+ * memorable line so far on top of any stories finished earlier in this game.
+ */
+export function summarize(s) {
+  if (!s || typeof s !== 'object' || !Array.isArray(s.lines)) return {};
+  const carry = { summary: typeof s.summary === 'string' ? s.summary : '', highlights: Array.isArray(s.highlights) ? s.highlights : [] };
+  if (s.done) return carry;
+  const plays = Number.isInteger(s.plays) ? s.plays : 0;
+  const count = playerLines(s.lines);
+  if (!count) {
+    // "Write another" with nothing written yet: the finished stories speak for themselves.
+    return plays ? carry : { summary: `Opened “${s.title}” — left before the first line`, highlights: carry.highlights };
+  }
+  const stats = statsOf(count, Number(s.twists) || 0);
+  const where = s.phase === 'ending' ? 'not named yet' : 'unfinished';
+  const summary =
+    plays && carry.summary
+      ? `${carry.summary} · then started “${s.title}” (${stats}, ${where})`
+      : `Started “${s.title}” together — ${stats}, ${where}`;
+  const highlight = clip(`“${s.title}” (${where}): ${memorableLine(s.lines)}`, 190);
+  return { summary, highlights: [...carry.highlights, highlight].slice(-6) };
+}
+
+/**
+ * The writer's line on this device (view-side, never sent anywhere until "Add my line"), checked
+ * against the authoritative state after every change so a line that was lost on the way or lost a
+ * race is never lost to the writer.
+ *   draft = { story, text, sent: null | { from, texts, at }, restored }
+ * - `sent.texts` are the texts sent for this turn (a "Send again" may have edited it) and
+ *   `sent.from` the line count when first sent. When a line by `me` with one of those texts shows
+ *   up from there on, it landed: the box is emptied (unless something new was typed since).
+ * - If the story moved on without it (the partner tapped "The End" at the same moment, or the
+ *   message was rejected), the text is kept and marked `restored` so the composer shows it again,
+ *   e.g. after "Keep writing".
+ * Returns the same object when nothing changes.
+ */
+export function reconcileDraft(d, s, me) {
+  if (!d || d.story !== s.story) return { story: s.story, text: '', sent: null, restored: false };
+  if (!d.sent) return d;
+  const landed = d.sent.texts.map(cleanLine);
+  const hit = s.lines.slice(d.sent.from).some((l) => !l.twist && l.by === me && landed.includes(l.text));
+  if (hit) return { ...d, text: landed.includes(cleanLine(d.text)) ? '' : d.text, sent: null, restored: false };
+  if (s.phase !== 'writing' || s.turn !== me) return { ...d, sent: null, restored: hasWords(d.text) };
+  return d;
 }
 
 /** Plain-text version of the story (for the AI `story` param and "Copy story"). */

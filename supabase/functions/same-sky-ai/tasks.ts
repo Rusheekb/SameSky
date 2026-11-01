@@ -105,24 +105,25 @@ export function sanitizeParams(raw: unknown): TaskParams {
 
 // ---------------------------------------------------------------- JSON schema (strict subset)
 
+// Type aliases (not interfaces) so a schema is assignable to the SDK's `{ [key: string]: unknown }`.
 export type SchemaNode = StringSchema | ArraySchema | ObjectSchema;
-export interface StringSchema {
+export type StringSchema = {
   type: 'string';
   description?: string;
   enum?: string[];
-}
-export interface ArraySchema {
+};
+export type ArraySchema = {
   type: 'array';
   description?: string;
   items: SchemaNode;
-}
-export interface ObjectSchema {
+};
+export type ObjectSchema = {
   type: 'object';
   description?: string;
   properties: Record<string, SchemaNode>;
   required: string[];
   additionalProperties: false;
-}
+};
 
 const str = (description?: string, values?: string[]): StringSchema => ({
   type: 'string',
@@ -323,6 +324,24 @@ const KINDS = ['choice', 'scale', 'open'];
 const LEVELS = ['1', '2', '3'];
 // Know Me Better labels read "About you: …" / "About Maya: …", so pronouns break them.
 const FIRST_SECOND_PERSON = /\b(?:i|me|my|mine|myself|you|your|yours|yourself)\b/i;
+/**
+ * This or That shows each side under "You'd pick…" and "<partner> would pick…", so I/me/you
+ * point at a different person on each screen. Same rule as PERSONAL in
+ * js/games/thisorthat/logic.js ("I-love-yous" is a noun, not a pronoun, and is fine).
+ */
+export const PERSONAL = /(?:^|[^\p{L}\p{N}'’-])(?:i|me|my|mine|myself|you|your|yours|yourself)(?=$|[^\p{L}\p{N}-])/iu;
+
+/**
+ * True when `text` names exactly one of the two players. Know Me and Heart to Heart show the
+ * same text to both of them (and about each of them in turn), so a line that names one player
+ * only reads right on one screen ("What do you love most about Sam?").
+ */
+export function namesOnePlayer(text: string, names: string[]): boolean {
+  const keys = [...new Set(names.map(keyOf))].filter((k) => k.length >= 2);
+  if (keys.length !== 2) return false;
+  const words = ` ${keyOf(text)} `;
+  return keys.filter((k) => words.includes(` ${k} `)).length === 1;
+}
 const QUESTION_START =
   /^(?:what|which|who|whom|whose|where|when|why|how|do|does|did|would|will|is|are|was|were|have|has|can|could|should)(?:'s)?\b/i;
 
@@ -379,7 +398,7 @@ Write exactly 10 starting pairs for In Sync. Each side is 1-2 everyday words (at
     }),
     guide: `Game: Know Me Better. One player is in the spotlight and answers a question about themselves while the partner secretly guesses their answer; then they reveal together and swap roles.
 
-The question appears as a label: "About you: <text>" on one screen and "About <partner's name>: <text>" on the other. So \`text\` must be a short noun phrase (2-7 words, at most 60 characters) that reads naturally after both: no "you", "your", "my" or "I", and no question mark.
+The question appears as a label: "About you: <text>" on one screen and "About <partner's name>: <text>" on the other. So \`text\` must be a short noun phrase (2-7 words, at most 60 characters) that reads naturally after both: no "you", "your", "my" or "I", no player names (each of them is asked it in turn), and no question mark.
 Good: "Go-to comfort food", "Most-used emoji", "Secret talent", "Ideal Sunday morning", "Song for a long drive".
 Bad: "What is your favourite food?", "Do you like cats", "Your biggest fear".
 
@@ -407,7 +426,7 @@ Write exactly 8 Know Me Better questions: about 4 "choice", 2 "scale" and 2 "ope
             .trim(),
         );
         if (text.length < 3 || text.length > 80 || !hasWords(text)) continue;
-        if (FIRST_SECOND_PERSON.test(text) || (asked && QUESTION_START.test(text))) continue;
+        if (FIRST_SECOND_PERSON.test(text) || (asked && QUESTION_START.test(text)) || namesOnePlayer(text, p.names)) continue;
         const kind = oneLine(it.kind).toLowerCase();
         if (kind === 'choice') {
           const options: string[] = [];
@@ -441,6 +460,10 @@ Write exactly 8 Know Me Better questions: about 4 "choice", 2 "scale" and 2 "ope
     guide: `Game: This or That. Each round shows two options side by side. Both players tap the one they'd pick and predict their partner's pick, then reveal together.
 
 Each side is 1-5 words (at most 32 characters) because it sits in a half-width card on a phone, so be punchy. Both sides should be genuinely tempting, so the choice is fun to argue about. Examples of the style (don't reuse them): "Breakfast in bed" vs "Fancy brunch out", "Handwritten letter" vs "Surprise voice note", "Matching pyjamas" vs "Stealing their hoodie".
+Every side must read the same on both phones and score honestly:
+- Each side appears under "You'd pick…" on one screen and "<partner's name> would pick…" on the other, so never use I, me, my, you or your in an option: "Breakfast in bed", not "You make me breakfast".
+- Matching picks count as being in tune, so no role or direction pairs where the two of them would naturally take opposite sides (big spoon vs little spoon, chasing vs being chased, kissing first vs being kissed, visiting vs hosting, planning the date vs being surprised): picking the same side there means wanting opposite things. Phrase it as a shared preference instead ("Spooning all night" vs "Face-to-face cuddles").
+- No hidden "whose?": an option must not depend on which of them picks it ("Living near family": whose family?).
 No moral dilemmas, nothing gross, and don't make either side the obviously "right" answer.`,
     request: (p) =>
       `${contextBlock(p)}
@@ -452,7 +475,7 @@ Write exactly 12 This or That dilemmas in tonight's vibe. A few can play on thei
         if (!isRecord(it)) continue;
         const a = label(it.a, 40);
         const b = label(it.b, 40);
-        if (!a || !b || keyOf(a) === keyOf(b)) continue;
+        if (!a || !b || keyOf(a) === keyOf(b) || PERSONAL.test(a) || PERSONAL.test(b)) continue;
         c.add([`${keyOf(a)} | ${keyOf(b)}`, `${keyOf(b)} | ${keyOf(a)}`], { a, b });
       }
       return c.out.length >= MIN_ITEMS.thisorthat_items ? { items: c.out } : null;
@@ -517,7 +540,7 @@ Write exactly 10 Duet Canvas prompts in tonight's vibe. One or two may draw on <
     }),
     guide: `Game: Heart to Heart. A deck of conversation cards the couple flips through on a call. For each card they either talk it through or both write an answer and reveal together.
 
-Each card is one question or a short invitation ("Tell me about…"), at most 160 characters, addressed to "you" because both of them answer it. Levels:
+Each card is one question or a short invitation ("Tell me about…"), at most 160 characters. Both of them answer every card, so it must work whichever of them reads it out: "you" is the one answering and "me", "us" or "we" mean the one asking or the two of them. Never name either player, and don't assume who did what or who is who (who visited whom, who moved, who said "I love you" first, who is the better cook). Levels:
 - "1" warm-up: light, fun and easy to answer.
 - "2" closer: about the two of them, memories, small dreams and habits.
 - "3" deep: vulnerable and meaningful: hopes, fears, what they need from each other, the future.
@@ -532,7 +555,7 @@ Write exactly 15 Heart to Heart cards: 5 at level "1", then 5 at level "2", then
         if (!isRecord(it)) continue;
         const text = item(it.text, 200);
         const lv = typeof it.level === 'number' ? String(it.level) : oneLine(it.level);
-        if (text.length < 8 || !LEVELS.includes(lv)) continue;
+        if (text.length < 8 || !LEVELS.includes(lv) || namesOnePlayer(text, p.names)) continue;
         c.add([keyOf(text)], { text: capitalise(text), level: Number(lv) });
       }
       return c.out.length >= MIN_ITEMS.deeptalk_cards ? { cards: c.out } : null;

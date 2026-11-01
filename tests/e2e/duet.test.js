@@ -55,6 +55,77 @@ async function scribble(page, from, to, { steps = 14, up = true, wobble = 0.06 }
 const LEFT = [0, 0.48];
 const RIGHT = [0.52, 1];
 
+/** The running game's state as this page last saved it. */
+async function gameState(t, page) {
+  const slot = page === t.a ? 'a' : 'b';
+  return page.evaluate((k) => JSON.parse(localStorage.getItem(k))?.game?.s, `samesky:${slot}:room:${t.room}`);
+}
+
+/**
+ * Wrap this page's BroadcastChannel so the test can drop outgoing fx messages (Supabase broadcast
+ * is at-most-once), count them, and add latency: `window.__drop = (kind, data) => bool` decides
+ * what's lost, `window.__delay = ms` holds every outgoing message back (still in order).
+ */
+function installLossyNet(page) {
+  return page.evaluate(() => {
+    window.__sent = {};
+    window.__dropped = 0;
+    window.__drop = null;
+    window.__delay = 0;
+    if (window.__lossy) return;
+    window.__lossy = true;
+    const orig = BroadcastChannel.prototype.postMessage;
+    const queue = [];
+    let timer = null;
+    const pump = () => {
+      timer = null;
+      while (queue.length && queue[0].at <= Date.now()) {
+        const { ch, m } = queue.shift();
+        orig.call(ch, m);
+      }
+      if (queue.length) timer = setTimeout(pump, 10);
+    };
+    BroadcastChannel.prototype.postMessage = function (m) {
+      if (m && m.t === 'fx') {
+        const kind = String(m.kind).split(':').pop();
+        window.__sent[kind] = (window.__sent[kind] || 0) + 1;
+        if (window.__drop?.(kind, m.data)) {
+          window.__dropped++;
+          return undefined;
+        }
+      }
+      if (window.__delay || queue.length) {
+        queue.push({ ch: this, m, at: Date.now() + (window.__delay || 0) });
+        if (!timer) timer = setTimeout(pump, 10);
+        return undefined;
+      }
+      return orig.call(this, m);
+    };
+  });
+}
+
+/** The board this page has stored for the current canvas: epoch + [id, length] per stroke. */
+function storedBoard(page) {
+  return page.evaluate(() => {
+    const key = Object.keys(sessionStorage).find((k) => k.startsWith('samesky:board:'));
+    const b = key && JSON.parse(sessionStorage.getItem(key));
+    if (!b) return null;
+    return { epoch: b.epoch, strokes: b.strokes.map((s) => `${s.id}:${Math.max(s.pts.length, s.n || 0)}`).sort() };
+  });
+}
+
+async function waitSameBoards(a, b, { timeout = 12000, what = 'boards converge' } = {}) {
+  const t0 = Date.now();
+  let ba;
+  let bb;
+  while (Date.now() - t0 < timeout) {
+    [ba, bb] = await Promise.all([storedBoard(a), storedBoard(b)]);
+    if (ba && bb && JSON.stringify(ba) === JSON.stringify(bb)) return ba;
+    await a.waitForTimeout(250);
+  }
+  throw new Error(`${what}: still different after ${timeout}ms\nA ${JSON.stringify(ba)}\nB ${JSON.stringify(bb)}`);
+}
+
 test('Duet Canvas: both draw at once, undo/clear/resync, finish together and frame it', { skip: !loadPlaywright() && 'playwright missing', timeout: 120000 }, async () => {
   const t = await openPair();
   const { a, b } = t;
@@ -115,8 +186,24 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
     // ---- new prompt (either player)
     await b.getByRole('button', { name: 'New prompt' }).click();
     await a.locator('.duet-prompt .prompt-text span').filter({ hasNotText: prompt }).waitFor();
-    const prompt2 = await a.locator('.duet-prompt .prompt-text span').innerText();
+    let prompt2 = await a.locator('.duet-prompt .prompt-text span').innerText();
     assert.notEqual(prompt2, prompt);
+
+    // ---- both tap 🔀 at the same moment (over a 400 ms link, so neither has seen the other's
+    // swap yet): one new prompt, not two — nobody's prompt is skipped unseen
+    await b.locator('.duet-prompt', { hasText: prompt2 }).waitFor();
+    const shuffles0 = (await gameState(t, a)).shuffles;
+    for (const p of [a, b]) await installLossyNet(p);
+    await Promise.all([a, b].map((p) => p.evaluate(() => (window.__delay = 400))));
+    await Promise.all([a, b].map((p) => p.evaluate(() => document.querySelector('button[aria-label="New prompt"]').click())));
+    await Promise.all([a, b].map((p) => p.evaluate(() => (window.__delay = 0))));
+    await a.locator('.duet-prompt .prompt-text span').filter({ hasNotText: prompt2 }).waitFor();
+    await a.waitForTimeout(1500);
+    const sA = await gameState(t, a);
+    assert.equal(sA.shuffles, shuffles0 + 1, 'the second tap was for a prompt that was already gone');
+    prompt2 = sA.prompt;
+    await b.locator('.duet-prompt .prompt-text span', { hasText: prompt2 }).waitFor();
+    assert.equal(await a.locator('.duet-prompt .prompt-text span').innerText(), prompt2);
 
     // ---- a little drawing, then "We're done!" from both
     await Promise.all([
@@ -124,13 +211,22 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
       scribble(b, [0.55, 0.6], [0.85, 0.7], { steps: 16 }),
     ]);
     await waitInk(a, (n) => n > 30, { region: RIGHT });
+    await b.setViewportSize({ width: 360, height: 640 });
     await a.getByRole('button', { name: /We're done/ }).click();
-    await b.getByText('Alex thinks it\'s finished').waitFor();
-    await a.getByText(/Waiting for Blair/).waitFor();
+    // The partner sees it in the prompt card above the board (no scrolling needed on a 360×640
+    // phone, where the finish row is below the fold) and can agree right there.
+    await b.locator('.duet-prompt.partner-ready', { hasText: 'Alex thinks it\'s finished' }).waitFor();
+    await b.evaluate(() => scrollTo(0, 0));
+    {
+      const [card, agree, bar] = await Promise.all(['.duet-prompt', '.duet-prompt .agree', '.reactions'].map((sel) => b.locator(sel).boundingBox()));
+      assert.ok(card.y >= 0 && card.y + card.height <= bar.y, `ready card on screen (${card.y}..${card.y + card.height}, bar at ${bar.y})`);
+      assert.ok(agree.y + agree.height <= bar.y);
+    }
+    await a.locator('.duet-prompt .ready-note', { hasText: /waiting for Blair/i }).waitFor();
     await b.waitForTimeout(500);
     await t.shot(b, 'duet-ready-b');
     await t.shot(a, 'duet-ready-a');
-    await b.getByRole('button', { name: /We're done/ }).click();
+    await b.getByRole('button', { name: "Agree, it's finished" }).click();
     await a.getByText('Masterpiece!').waitFor();
     await b.getByText('Masterpiece!').waitFor();
     assert.equal(await a.locator('.draw-tools').count(), 0, 'tools hidden on the framed view');
@@ -163,6 +259,98 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
     await t.backToLobby(a);
     await a.locator('.score-pill', { hasText: '6' }).waitFor();
     await b.locator('.score-pill', { hasText: '6' }).waitFor();
+    t.assertNoErrors();
+  } finally {
+    await t.close();
+  }
+});
+
+test('Duet Canvas: lost stroke, undo and clear messages heal by themselves; no resync storms while drawing', { skip: !loadPlaywright() && 'playwright missing', timeout: 120000 }, async () => {
+  const t = await openPair({ viewport: { width: 1280, height: 800 } }); // a laptop
+  const { a, b } = t;
+  try {
+    await t.startGame('duet');
+    await a.waitForTimeout(800); // mount-time syncs done
+    // The finish row clears the fixed reaction bar on a laptop.
+    for (const p of [a, b]) {
+      const [cta, bar] = await Promise.all([p.getByRole('button', { name: /We're done/ }).boundingBox(), p.locator('.reactions').boundingBox()]);
+      assert.ok(cta.y + cta.height <= bar.y, `"We're done!" (bottom ${cta.y + cta.height}) above the reaction bar (${bar.y})`);
+    }
+    await installLossyNet(a);
+    await installLossyNet(b);
+
+    // ---- both draw at the same time for a while (several digest rounds): no resync requests
+    for (let i = 0; i < 4; i++) {
+      await Promise.all([
+        scribble(a, [0.08, 0.15 + i * 0.2], [0.42, 0.25 + i * 0.2], { steps: 30 }),
+        scribble(b, [0.58, 0.15 + i * 0.2], [0.92, 0.25 + i * 0.2], { steps: 30 }),
+      ]);
+      await a.waitForTimeout(1200);
+    }
+    await a.waitForTimeout(1500);
+    const sentA = await a.evaluate(() => window.__sent);
+    const sentB = await b.evaluate(() => window.__sent);
+    assert.ok(sentA.digest >= 2 && sentB.digest >= 2, `digests flow (${sentA.digest}, ${sentB.digest})`);
+    assert.equal((sentA['sync?'] || 0) + (sentB['sync?'] || 0), 0, `no resync while drawing: ${JSON.stringify({ sentA, sentB })}`);
+    const base = await waitSameBoards(a, b, { what: 'live drawing' });
+    assert.ok(base.strokes.length >= 8, JSON.stringify(base));
+
+    // ---- one middle chunk of Blair's long stroke is lost: Alex's copy has a gap…
+    await b.evaluate(() => {
+      let n = 0;
+      window.__drop = (kind, d) => kind === 'stroke' && d.o > 0 && !d.end && ++n === 2;
+    });
+    await scribble(b, [0.55, 0.9], [0.95, 0.5], { steps: 160, wobble: 0.03 });
+    assert.equal(await b.evaluate(() => window.__dropped), 1);
+    // …a whole stroke of Alex's never arrives…
+    await a.evaluate(() => {
+      window.__drop = (kind) => kind === 'stroke';
+    });
+    await scribble(a, [0.1, 0.9], [0.4, 0.6], { steps: 20 });
+    await a.evaluate(() => {
+      window.__drop = null;
+    });
+    // …and Blair's undo of her first line is lost too.
+    await b.evaluate(() => {
+      window.__drop = (kind) => kind === 'undo';
+    });
+    const beforeUndo = await storedBoard(b);
+    await b.getByRole('button', { name: 'Undo' }).click(); // removes the long stroke just drawn
+    await b.evaluate(() => {
+      window.__drop = null;
+    });
+    await b.waitForTimeout(600);
+    const [ba, bb] = await Promise.all([storedBoard(a), storedBoard(b)]);
+    assert.notDeepEqual(ba, bb, 'the boards really differ now');
+    assert.equal(bb.strokes.length, beforeUndo.strokes.length - 1);
+    await t.shot(a, 'duet-lossy-before-a');
+    const healed = await waitSameBoards(a, b, { what: 'after lost chunk / stroke / undo' });
+    assert.equal(healed.strokes.length, base.strokes.length + 1, 'plus Alex\'s lost stroke; the undone one is gone on both');
+
+    // Pixels agree too.
+    const [inkA, inkB] = [await inkCount(a), await inkCount(b)];
+    assert.ok(Math.abs(inkA - inkB) <= Math.max(8, inkA * 0.02), `same picture (${inkA} vs ${inkB})`);
+
+    // ---- a lost clear
+    await a.evaluate(() => {
+      window.__drop = (kind) => kind === 'clear';
+    });
+    await a.getByRole('button', { name: 'Clear' }).click();
+    await a.getByRole('button', { name: 'Tap again to clear' }).click();
+    await a.evaluate(() => {
+      window.__drop = null;
+    });
+    assert.ok((await inkCount(b)) > 30, 'B missed the clear for now');
+    await waitInk(b, (n) => n === 0, { timeout: 10000, what: 'clear reaches B through the digest' });
+    const cleared = await waitSameBoards(a, b, { what: 'after lost clear' });
+    assert.deepEqual(cleared.strokes, []);
+    await t.shot(b, 'duet-lossy-after-b');
+
+    // Quiet again: matching digests, no further resyncs.
+    const asks = async () => (await a.evaluate(() => window.__sent['sync?'] || 0)) + (await b.evaluate(() => window.__sent['sync?'] || 0));
+    const n0 = await asks();
+    await a.waitForTimeout(7000);
+    assert.equal(await asks(), n0, 'no resync traffic once the boards match');
     t.assertNoErrors();
   } finally {
     await t.close();

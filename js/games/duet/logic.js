@@ -99,15 +99,25 @@ function summaryOf(finished) {
     : `Drew ${finished.length} masterpieces together, last: “${last.prompt}”`;
 }
 
+/**
+ * Actions carry what the player was looking at, so a late or raced one is ignored:
+ *   { type: 'newPrompt', from }   `from` = the prompt being replaced (required: if both of you
+ *                                 tap 🔀 at once, only the first swap happens)
+ *   { type: 'ready', on, n?, from? }   `n` = canvas number, `from` = the prompt it was for
+ *   { type: 'again', n? }
+ */
 export function reduce(s, a, ctx) {
   if (!a || !ctx.players.includes(a.by)) return s;
+  if (a.n !== undefined && a.n !== s.n) return s; // meant for another canvas
   switch (a.type) {
     case 'newPrompt': {
-      if (s.phase !== 'draw') return s;
+      if (s.phase !== 'draw' || a.from !== s.prompt) return s;
       return { ...s, ...nextPrompt(s, ctx), ready: {}, shuffles: s.shuffles + 1 };
     }
     case 'ready': {
       if (s.phase !== 'draw') return s;
+      // "We're done" tapped on a prompt that has since been swapped doesn't count for the new one.
+      if (a.from !== undefined && a.from !== s.prompt) return s;
       const on = a.on !== false;
       if (!!s.ready[a.by] === on) return s;
       const ready = { ...s.ready };

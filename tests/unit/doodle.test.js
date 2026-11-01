@@ -282,3 +282,32 @@ test('silly vibe leans on silly wildcards', () => {
   const s = doodle.init(ctx, {});
   assert.ok(SILLY.includes(s.options[2]));
 });
+
+test('actions tagged with an earlier round are ignored (late delivery, or both tapping "Next round")', () => {
+  const h = gameHarness(doodle);
+  const word = h.s.options[0];
+  h.act('p1', { type: 'choose', index: 0, round: 1 });
+  h.act('p2', { type: 'guess', text: word, round: 1 });
+  assert.equal(h.s.phase, 'result');
+  // Both tap "Next round" at once: round 2, not round 3.
+  h.act('p1', { type: 'next', round: 1 });
+  const r2 = h.s;
+  assert.equal(r2.round, 2);
+  assert.equal(h.act('p2', { type: 'next', round: 1 }), r2);
+  // Round 2: Blair draws and skips; a late "next" from round 1 must not skip round 2's result screen.
+  h.act('p2', { type: 'choose', index: 0, round: 2 });
+  h.act('p2', { type: 'skip', round: 2 });
+  assert.equal(h.s.phase, 'result');
+  const res2 = h.s;
+  assert.equal(h.act('p1', { type: 'next', round: 1 }), res2);
+  h.act('p1', { type: 'next', round: 2 });
+  // Round 3: Alex draws again; a stale "skip" from round 1 doesn't end it, a stale guess doesn't count.
+  h.act('p1', { type: 'choose', index: 0, round: 3 });
+  const r3 = h.s;
+  assert.equal(h.act('p1', { type: 'skip', round: 1 }), r3);
+  assert.equal(h.act('p2', { type: 'guess', text: r3.word, round: 1 }), r3);
+  assert.equal(h.act('p1', { type: 'choose', index: 1, round: 2 }), r3);
+  // Untagged actions still work as before.
+  h.act('p1', { type: 'skip' });
+  assert.equal(h.s.phase, 'result');
+});

@@ -27,11 +27,6 @@ export default function DoodleView({ s, api }) {
       api.effects.sound('fail');
     }
   });
-  useOnChange(s.phase === 'draw' ? s.closeCount : 0, () => {
-    const g = s.guesses[s.guesses.length - 1]?.text;
-    api.effects.toast(isDrawer ? `${guesser?.name || 'They'} is so close: “${g}” 🤏` : `So close! Check the spelling 🤏`);
-    api.effects.sound('tick');
-  });
   useOnChange(isDrawer && s.phase === 'draw' ? s.guessCount : 0, () => api.effects.sound('pop'));
   useOnChange(s.phase === 'draw' ? s.hintLevel : 0, () => api.effects.sound('reveal'));
   useOnChange(s.phase === 'final' ? s.plays : 0, () => {
@@ -63,7 +58,7 @@ function Choose({ s, api, isDrawer, drawer, guesser }) {
       ${s.options.map(
         (w, i) => html`<button class="btn btn-choice option flip-in" key=${w} style=${`animation-delay:${i * 90}ms`}
           onClick=${() => {
-            api.act({ type: 'choose', index: i });
+            api.act({ type: 'choose', index: i, round: s.round });
             api.effects.sound('lock');
           }}>
           <b>${w}</b>${!s.ai && html`<small class=${`tag tag-${i}`}>${TAGS[i]}</small>`}
@@ -71,7 +66,7 @@ function Choose({ s, api, isDrawer, drawer, guesser }) {
       )}
     </div>
     ${!s.rerolled && s.pool.length > 0 &&
-    html`<button class="btn btn-ghost btn-sm" onClick=${() => api.act({ type: 'reroll' })}>🔀 Show me three others</button>`}
+    html`<button class="btn btn-ghost btn-sm" onClick=${() => api.act({ type: 'reroll', round: s.round })}>🔀 Show me three others</button>`}
     <p class="muted small">You'll have ${DRAW_MS / 1000} seconds. No letters allowed in the drawing 😉</p>
   </div>`;
 }
@@ -81,6 +76,23 @@ function Round({ s, api, isDrawer, drawer, guesser, boardKey }) {
   const handle = useRef(null);
   const dName = drawer?.name || 'Your partner';
   const gName = guesser?.name || 'Your partner';
+
+  // "So close!" lives on the board, not in a global toast: it belongs to this round's drawing
+  // phase, so it can never linger over the result when the right guess lands a moment later.
+  const [close, setClose] = useState(null);
+  useOnChange(drawing ? s.closeCount : 0, (n) => {
+    setClose({ n, text: s.guesses[s.guesses.length - 1]?.text || '' });
+    api.effects.sound('tick');
+  });
+  useEffect(() => {
+    if (!close) return undefined;
+    const h = setTimeout(() => setClose(null), 2600);
+    return () => clearTimeout(h);
+  }, [close]);
+  const closePop =
+    drawing && close
+      ? html`<div class="close-pop pop-in" key=${close.n} role="status">${isDrawer ? html`${gName} is so close: “${close.text}” 🤏` : 'So close! Check the spelling 🤏'}</div>`
+      : null;
 
   return html`<div class="stack round">
     ${drawing
@@ -103,16 +115,16 @@ function Round({ s, api, isDrawer, drawer, guesser, boardKey }) {
       canClear=${(id) => id === s.drawer}
       onCleared=${() => api.effects.toast(`${dName} started over ✨`)}
       label=${`Drawing by ${isDrawer ? 'you' : dName}`}
-      emptyHint=${drawing ? (isDrawer ? 'Start drawing here ✏️' : `Waiting for ${dName}'s first line…`) : ''} />
+      emptyHint=${drawing ? (isDrawer ? 'Start drawing here ✏️' : `Waiting for ${dName}'s first line…`) : ''}
+      overlay=${closePop} />
 
     ${drawing && !isDrawer &&
     html`<${AnswerBox} placeholder="Type a guess…" button="Guess" maxLength=${GUESS_MAX} autoFocus=${!coarse()}
       onSubmit=${(text) => {
-        api.act({ type: 'guess', text });
+        api.act({ type: 'guess', text, round: s.round });
         api.effects.sound('tap');
       }} />`}
-    ${drawing && html`<${Guesses} s=${s} isDrawer=${isDrawer} gName=${gName} />`}
-    ${drawing && isDrawer && html`<${SkipButton} api=${api} />`}
+    ${drawing && html`<${Guesses} s=${s} isDrawer=${isDrawer} gName=${gName} action=${isDrawer && html`<${SkipButton} api=${api} round=${s.round} />`} />`}
     ${!drawing &&
     html`<${NextBar} s=${s} api=${api} onSave=${() =>
       handle.current?.savePNG({ caption: s.last?.word || 'Doodle', sub: `Drawn by ${dName} · Same Sky 🌙`, filename: `doodle-${slug(s.last?.word)}.png` })} />`}
@@ -120,7 +132,7 @@ function Round({ s, api, isDrawer, drawer, guesser, boardKey }) {
 }
 
 /** Two taps (no native dialog: those can be blocked in in-app browsers). */
-function SkipButton({ api }) {
+function SkipButton({ api, round }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return undefined;
@@ -128,15 +140,17 @@ function SkipButton({ api }) {
     return () => clearTimeout(h);
   }, [armed]);
   return html`<button class=${`btn btn-sm skip-btn ${armed ? 'armed' : 'btn-ghost'}`}
-    onClick=${() => (armed ? api.act({ type: 'skip' }) : setArmed(true))}>
-    ${armed ? 'Tap again to skip (no points)' : 'Skip this word'}</button>`;
+    aria-label=${armed ? 'Tap again to skip (no points)' : 'Skip this word'} title=${armed ? 'No points for this one' : ''}
+    onClick=${() => (armed ? api.act({ type: 'skip', round }) : setArmed(true))}>
+    ${armed ? 'Tap again to skip' : 'Skip this word'}</button>`;
 }
 
-function Guesses({ s, isDrawer, gName }) {
+/** Guesses so far; `action` (the drawer's Skip) sits in the header so it stays near the board. */
+function Guesses({ s, isDrawer, gName, action = null }) {
   const list = s.guesses;
   return html`<div class="guesses" aria-live="polite">
     <div class="guesses-head"><small>${isDrawer ? `${gName}'s guesses` : 'Your guesses'}</small>
-      ${s.guessCount > list.length && html`<small class="muted">${s.guessCount} so far</small>`}</div>
+      <span class="guesses-tools">${s.guessCount > list.length && html`<small class="muted">${s.guessCount} so far</small>`}${action}</span></div>
     ${list.length
       ? html`<div class="bubbles">${list.map(
           (g, i) => html`<span key=${`${s.guessCount - list.length + i}`} class=${`bubble pop-in ${g.close ? 'close' : ''}`}>
@@ -170,7 +184,7 @@ function NextBar({ s, api, onSave }) {
   const last = s.round >= s.rounds;
   const nextDrawer = api.player(s.guesser);
   return html`<div class="stack center next-bar">
-    <button class="btn btn-primary btn-lg" onClick=${() => api.act({ type: 'next' })}>
+    <button class="btn btn-primary btn-lg" onClick=${() => api.act({ type: 'next', round: s.round })}>
       ${last ? 'See our results' : 'Next round →'}${secs != null && html`<small class="auto">${secs}s</small>`}</button>
     ${!last && html`<p class="muted small">${s.guesser === api.meId ? 'You draw next ✏️' : `${nextDrawer?.name || 'Your partner'} draws next`}</p>`}
     <button class="btn btn-ghost btn-sm" onClick=${onSave}>💾 Save this doodle</button>
@@ -227,6 +241,6 @@ function Final({ s, api }) {
       )}
     </div>
     <button class="btn" onClick=${saveAll}>💾 Save our doodles</button>
-    <${ResultActions} api=${api} onAgain=${() => api.act({ type: 'again' })} againLabel="Play again" />
+    <${ResultActions} api=${api} onAgain=${() => api.act({ type: 'again', round: s.round })} againLabel="Play again" />
   </div>`;
 }

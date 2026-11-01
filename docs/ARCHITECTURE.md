@@ -45,7 +45,9 @@ resumes where you were. The protocol (`js/core/session.js`) is built to survive 
   running game is recorded first. Everything adopted from the network is sanitised.
 
 Anything that's high-frequency or doesn't need to survive a refresh (doodle strokes, emoji
-reactions, "typing…" hints) goes through **fx** messages instead of state.
+reactions, "typing…" hints) goes through **fx** messages instead of state. Drawing boards heal
+themselves: every 3 s each board sends a small digest of its finished strokes and the partner
+asks for exactly what it's missing (`js/ui/canvas.js` documents the protocol).
 
 ## Writing a game
 
@@ -153,5 +155,7 @@ Common params (all optional): `vibe` (`sweet|flirty|silly|deep`), `aboutUs` (≤
 
 The ×N counts are maximums: the server drops invalid items and may return fewer (at least 3;
 `doodle_words` at least 6), otherwise it answers 502. Status codes the client can see:
-401/403 wrong passcode or origin · 413 request too large · 422 Claude declined · 429 rate
-limited (`Retry-After`) · 502 unusable output or upstream error · 500 server not configured.
+401 wrong passcode · 403 website not in `ALLOWED_ORIGINS` (readable by the page) · 413 request
+too large · 422 Claude declined · 429 rate limited, or the AI paused after 30 wrong passcodes in
+10 min (`Retry-After`) · 502 unusable output or upstream error · 500 server not configured
+(including an `APP_PASSCODE` under 10 characters or a single word).

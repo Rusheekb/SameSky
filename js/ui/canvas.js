@@ -2,20 +2,34 @@
 //
 // Coordinates are integers 0..1000 on both axes of a fixed-aspect board, so both players see the
 // same drawing whatever their screen size. A stroke is
-//   { id, by, color, size, t, e, mirror, pts: [[x, y], ...] }
+//   { id, by, color, size, t, e, mirror, pts: [[x, y], ...], n? }
 // where `size` is the brush width in board units (relative to the width), `t` the authority-clock
 // start time (strokes are ordered by (t, id) so both screens stack them identically), `e` the clear
-// "epoch" the stroke belongs to, and `mirror` (0/1) whether it is also painted mirrored.
+// "epoch" the stroke belongs to, and `mirror` (0/1) whether it is also painted mirrored. A copy
+// whose points were simplified for a sync remembers its author's point count in `n`
+// (see strokeLen()), so both screens agree on how complete it is.
 //
 // Strokes never go into game state. They travel over the game-scoped fx channel; every payload
 // carries `k` (the board key) so a new round's board ignores stragglers from the previous one:
-//   'stroke' { k, id, color, size, t, e, mirror, pts, start?, end? }   ≤ MAX_CHUNK points, ~every 50 ms
+//   'stroke' { k, id, color, size, t, e, mirror, o, pts, start?, end? }   ≤ MAX_CHUNK points, ~every 60 ms
+//            (`o` = index of pts[0] in the author's stroke, so overlaps are skipped, never doubled)
 //   'undo'   { k, id }                 remove one of the sender's own strokes
 //   'clear'  { k, epoch }              wipe everything older than `epoch`
-//   'sync?'  { k }                     "I just (re)mounted — send me what you have"
-//   'sync'   { k, epoch, tomb, strokes, part, parts }   reply, split into a few messages
-// Merging is idempotent (union by id, minus tombstones, minus older epochs) so a sync can be
-// applied in any order and any number of times.
+//   'sync?'  { k, epoch?, have? }      "send me what I'm missing" (`have` = [[id, length], ...];
+//                                      without it the whole board comes back)
+//   'sync'   { k, epoch, tomb, strokes, part, parts, more? }   reply, split into a few messages
+//            (`more`: "your list showed things I lack, I'm asking you back")
+//   'digest' { k, epoch, count, hash, open }            every DIGEST_MS while mounted
+// Merging is idempotent (union by id, minus tombstones, minus older epochs, longer copy wins) so
+// a sync can be applied in any order and any number of times.
+//
+// Broadcasts are at-most-once (Supabase drops messages under load), so a lost chunk, undo or
+// clear would leave the two boards different for good. Each board therefore sends a small digest
+// of its finished strokes every few seconds; a board that sees a digest that doesn't match its
+// own asks for what it's missing with a targeted 'sync?' (one side asks first, and its list lets
+// the other see what *it* lacks — see createResync). Strokes still being drawn are left out of
+// the digest (and listed in `open`) so live drawing never looks like a mismatch, and requests
+// that bring nothing back back off, so a board that can't be repaired never floods the channel.
 //
 // Everything above the "Browser-only" line is pure and runs in Node tests. DOM access only
 // happens inside functions that the component calls in the browser.
@@ -31,6 +45,11 @@ export const SYNC_MAX_POINTS = 6000; // total points in one sync reply (all part
 export const SYNC_PART_POINTS = 1500; // points per sync message
 export const MIN_STEP = 2; // ignore pointer moves smaller than this (board units)
 export const ERASER_SCALE = 2.4;
+export const DIGEST_MS = 3000; // how often a mounted board tells the partner what it has
+export const PULL_MIN_MS = 2500; // a mismatch asks for a resync at most this often…
+export const PULL_MAX_MS = 60000; // …backing off (doubling) while mismatches persist
+export const MAX_HAVE = 600; // strokes listed in a 'sync?' (a bigger board asks for everything)
+export const MAX_DIGEST_OPEN = 16; // open strokes a digest may leave out
 
 export const PAPER = '#fffaf3';
 export const PALETTE = [
@@ -125,6 +144,11 @@ export function findStroke(board, id) {
   return i < 0 ? null : board.strokes[i];
 }
 
+/** How many points a stroke really has: a simplified copy remembers its author's count in `n`. */
+export function strokeLen(s) {
+  return Math.max(s.pts.length, s.n || 0);
+}
+
 /** Insert keeping (t, id) order; almost always appends. */
 function insertSorted(list, stroke) {
   let i = list.length;
@@ -146,10 +170,13 @@ export function appendPoints(board, id, pts, by) {
   if (i < 0 || !pts.length) return board;
   const cur = board.strokes[i];
   if (by !== undefined && cur.by !== by) return board;
-  const room = MAX_STROKE_PTS - cur.pts.length;
+  const room = MAX_STROKE_PTS - strokeLen(cur);
   if (room <= 0) return board;
+  const add = room < pts.length ? pts.slice(0, room) : pts;
+  const next = { ...cur, pts: cur.pts.concat(add) };
+  if (cur.n) next.n = cur.n + add.length;
   const strokes = board.strokes.slice();
-  strokes[i] = { ...cur, pts: cur.pts.concat(room < pts.length ? pts.slice(0, room) : pts) };
+  strokes[i] = next;
   return { ...board, strokes };
 }
 
@@ -180,7 +207,12 @@ export function applyUndo(board, id, from) {
   return { ...board, strokes, tomb: tombWith(board.tomb, id) };
 }
 
-/** Apply a live 'stroke' message from `from`. */
+/**
+ * Apply a live 'stroke' message from `from`. With an offset `o` the chunk lands at its place in
+ * the author's stroke: points we already have (a sync overtook the chunk) are skipped, never
+ * doubled. A gap (a lost chunk) is bridged for now; the stroke stays short of its author's copy,
+ * which the digest notices and a resync repairs.
+ */
 export function applyStrokeMsg(board, msg, from) {
   const s = sanitizeStroke(msg, from);
   if (!s) return board;
@@ -188,8 +220,16 @@ export function applyStrokeMsg(board, msg, from) {
   // A stroke from a newer epoch means we missed a clear: catch up.
   if (s.e > b.epoch) b = applyClear(b, s.e);
   if (s.e < b.epoch || b.tomb.includes(s.id)) return b;
-  if (indexOf(b, s.id) < 0) return s.pts.length ? addStroke(b, s) : b;
-  return appendPoints(b, s.id, s.pts, from);
+  const i = indexOf(b, s.id);
+  if (i < 0) return s.pts.length ? addStroke(b, s) : b;
+  let pts = s.pts;
+  const o = Number(msg.o);
+  if (Number.isInteger(o) && o >= 0) {
+    const have = strokeLen(b.strokes[i]);
+    if (o + pts.length <= have) return b;
+    if (o < have) pts = pts.slice(have - o);
+  }
+  return appendPoints(b, s.id, pts, from);
 }
 
 /** The newest stroke drawn by `by` (for undo). */
@@ -212,7 +252,8 @@ export function boardPointCount(board) {
 
 /**
  * Merge a sync payload (or a stored board) into ours. `allowedBy` limits stroke authors to the
- * two players. Union by id; a stroke we already have only grows (never shrinks).
+ * two players. Union by id; a stroke we already have is only replaced by a more complete copy
+ * (by strokeLen), so it never shrinks.
  */
 export function mergeBoards(board, inc, allowedBy = null) {
   if (!inc || typeof inc !== 'object') return board;
@@ -233,12 +274,17 @@ export function mergeBoards(board, inc, allowedBy = null) {
       if (allowedBy && !allowedBy.includes(by)) continue;
       const s = sanitizeStroke(raw, by);
       if (!s || !s.pts.length || s.e < b.epoch || b.tomb.includes(s.id)) continue;
+      const n = Number(raw.n);
+      if (Number.isInteger(n) && n > s.pts.length && n <= MAX_STROKE_PTS) s.n = n;
       const i = indexOf(b, s.id);
       if (i < 0) {
         b = addStroke(b, s);
-      } else if (b.strokes[i].pts.length < s.pts.length && b.strokes[i].by === s.by) {
+      } else if (strokeLen(b.strokes[i]) < strokeLen(s) && b.strokes[i].by === s.by) {
+        const next = { ...b.strokes[i], pts: s.pts };
+        if (s.n) next.n = s.n;
+        else delete next.n;
         const strokes = b.strokes.slice();
-        strokes[i] = { ...b.strokes[i], pts: s.pts };
+        strokes[i] = next;
         b = { ...b, strokes };
       }
     }
@@ -278,19 +324,55 @@ export function simplifyPts(pts, tol = 1) {
   return pts.filter((_, i) => keep[i]);
 }
 
+/** A 'sync?' request's `have` list ([[id, length], ...]) as a Map; null when absent or unusable. */
+export function readHave(raw) {
+  if (!Array.isArray(raw)) return null;
+  const have = new Map();
+  for (const e of raw.slice(0, MAX_HAVE)) {
+    if (!Array.isArray(e) || typeof e[0] !== 'string' || !ID.test(e[0])) continue;
+    const n = Number(e[1]);
+    if (Number.isInteger(n) && n >= 0) have.set(e[0], n);
+  }
+  return have;
+}
+
+/** What this board holds, for a targeted 'sync?' (null when there are too many strokes to list). */
+export function boardManifest(board, max = MAX_HAVE) {
+  if (board.strokes.length > max) return null;
+  return board.strokes.map((s) => [s.id, strokeLen(s)]);
+}
+
+/** The body of a 'sync?' from this board: its epoch and, when it fits, what it already has. */
+export function syncRequest(board) {
+  const have = boardManifest(board);
+  return have ? { epoch: board.epoch, have } : { epoch: board.epoch };
+}
+
 /**
- * Build the 'sync' reply for a board: strokes simplified (more aggressively if needed) so the
- * whole reply stays under `maxPoints`, then split into parts of ≤ `partPoints` points. Open
- * (in-progress) strokes are sent as-is so later live chunks still line up. Always ≥ 1 part.
+ * Build the 'sync' reply for a board: strokes as they are, or simplified (more aggressively if
+ * needed) so the whole reply stays under `maxPoints`, then split into parts of ≤ `partPoints` points. Open
+ * (in-progress) strokes are sent as-is so later live chunks still line up; a simplified copy
+ * carries its real length in `n`. With `have` (the asker's list) only strokes the asker lacks or
+ * holds a shorter copy of are sent, plus the tombstones of strokes it still has. Always ≥ 1 part
+ * (an empty reply still tells the asker our epoch).
  */
-export function syncPayloads(board, k, { open = null, maxPoints = SYNC_MAX_POINTS, partPoints = SYNC_PART_POINTS } = {}) {
+export function syncPayloads(board, k, { open = null, have = null, maxPoints = SYNC_MAX_POINTS, partPoints = SYNC_PART_POINTS } = {}) {
   const isOpen = (s) => !!open && (open.has ? open.has(s.id) : false);
-  const strip = (s, tol) => ({ id: s.id, by: s.by, color: s.color, size: s.size, t: s.t, e: s.e, mirror: s.mirror, pts: isOpen(s) || tol === 0 ? s.pts : simplifyPts(s.pts, tol) });
-  let tol = 0.75;
-  let list = board.strokes.map((s) => strip(s, tol));
+  const theirs = have instanceof Map ? have : readHave(have);
+  const wanted = theirs ? board.strokes.filter((s) => !(theirs.get(s.id) >= strokeLen(s))) : board.strokes;
+  const strip = (s, tol) => {
+    const pts = isOpen(s) || tol === 0 ? s.pts : simplifyPts(s.pts, tol);
+    const out = { id: s.id, by: s.by, color: s.color, size: s.size, t: s.t, e: s.e, mirror: s.mirror, pts };
+    if (pts.length < strokeLen(s)) out.n = strokeLen(s);
+    return out;
+  };
+  // Exact copies when they fit (so both screens end up with the very same points), otherwise
+  // simplify a little more each pass.
+  let tol = 0;
+  let list = wanted.map((s) => strip(s, tol));
   while (boardPointCount({ strokes: list }) > maxPoints && tol < 24) {
-    tol *= 2;
-    list = board.strokes.map((s) => strip(s, tol));
+    tol = tol ? tol * 2 : 0.75;
+    list = wanted.map((s) => strip(s, tol));
   }
   if (boardPointCount({ strokes: list }) > maxPoints) {
     // Still too big: keep the newest strokes that fit.
@@ -316,12 +398,172 @@ export function syncPayloads(board, k, { open = null, maxPoints = SYNC_MAX_POINT
     n += s.pts.length;
   }
   if (cur.length || !parts.length) parts.push(cur);
-  return parts.map((strokes, i) => ({ k, epoch: board.epoch, tomb: i === 0 ? board.tomb.slice(-MAX_TOMB) : [], strokes, part: i + 1, parts: parts.length }));
+  const tomb = theirs ? board.tomb.filter((id) => theirs.has(id)) : board.tomb.slice(-MAX_TOMB);
+  return parts.map((strokes, i) => ({ k, epoch: board.epoch, tomb: i === 0 ? tomb : [], strokes, part: i + 1, parts: parts.length }));
+}
+
+/** Does a 'sync?' show that the asker holds strokes (or a clear) we're missing? `skip` = ids still being drawn. */
+export function partnerHasMore(board, req, skip = null) {
+  const e = Number(req?.epoch);
+  if (Number.isInteger(e) && e !== board.epoch) return e > board.epoch;
+  const have = readHave(req?.have);
+  if (!have) return false;
+  const mine = new Map(board.strokes.map((s) => [s.id, s]));
+  const tomb = new Set(board.tomb);
+  for (const [id, n] of have) {
+    if (tomb.has(id) || skip?.has?.(id)) continue;
+    const s = mine.get(id);
+    if (s ? n > strokeLen(s) : n > 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Ids of our own strokes that we undid but a sync reply still carries: the partner missed those
+ * 'undo' messages, so we send them again (undo is idempotent).
+ */
+export function missedUndos(board, inc, me, max = 50) {
+  if (!inc || !Array.isArray(inc.strokes) || !board.tomb.length) return [];
+  const tomb = new Set(board.tomb);
+  const out = [];
+  for (const raw of inc.strokes) {
+    if (out.length >= max) break;
+    if (raw && raw.by === me && typeof raw.id === 'string' && tomb.has(raw.id) && !out.includes(raw.id)) out.push(raw.id);
+  }
+  return out;
+}
+
+function fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Fingerprint of a board: its epoch, the number of strokes and an order-independent hash of
+ * (id, length) pairs. Strokes in `skip` (still being drawn) are left out.
+ */
+export function boardDigest(board, skip = null) {
+  let count = 0;
+  let hash = 0;
+  for (const s of board.strokes) {
+    if (skip?.has?.(s.id)) continue;
+    count++;
+    hash = (hash + fnv1a(`${s.id}:${strokeLen(s)}`)) >>> 0;
+  }
+  return { epoch: board.epoch, count, hash };
+}
+
+/** The periodic 'digest' message (minus `k`), or null while too many strokes are in flight. */
+export function digestMessage(board, open = []) {
+  const ids = [...open].filter((id) => typeof id === 'string' && ID.test(id));
+  if (ids.length > MAX_DIGEST_OPEN) return null;
+  return { ...boardDigest(board, new Set(ids)), open: ids };
+}
+
+/**
+ * Compare a partner's digest with our board → 'match' | 'mismatch' | 'busy' | 'invalid'.
+ * Both sides leave out the strokes the sender listed as open. If we are drawing (or receiving)
+ * a stroke the sender didn't list, its digest can't be compared yet: 'busy', try the next one.
+ */
+export function compareDigest(board, d, myOpen = []) {
+  if (!d || typeof d !== 'object') return 'invalid';
+  const { epoch, count, hash } = d;
+  if (!Number.isInteger(epoch) || epoch < 0 || !Number.isInteger(count) || count < 0) return 'invalid';
+  if (!Number.isInteger(hash) || hash < 0 || hash > 0xffffffff) return 'invalid';
+  const open = Array.isArray(d.open) ? d.open : [];
+  if (open.length > MAX_DIGEST_OPEN) return 'busy';
+  const theirs = new Set(open.filter((id) => typeof id === 'string' && ID.test(id)));
+  for (const id of myOpen) if (!theirs.has(id)) return 'busy';
+  if (epoch !== board.epoch) return 'mismatch';
+  const mine = boardDigest(board, theirs);
+  return mine.count === count && mine.hash === hash ? 'match' : 'mismatch';
+}
+
+/**
+ * Rate limit for resync requests: at most one per `gap`, and the gap doubles (up to PULL_MAX_MS)
+ * with every request, so a board that can't be repaired (e.g. one too big for a sync reply) asks
+ * rarely instead of flooding the channel. A matching digest, or a reply that actually repaired
+ * something, resets it.
+ */
+export function createPuller({ min = PULL_MIN_MS, max = PULL_MAX_MS } = {}) {
+  let last = -Infinity;
+  let gap = min;
+  return {
+    /** True if a request may go out now (and records it). */
+    take(now) {
+      if (now - last < gap) return false;
+      last = now;
+      gap = Math.min(gap * 2, max);
+      return true;
+    },
+    /** A request went out for another reason (mount / reconnect): don't pile another on top. */
+    note(now) {
+      last = now;
+    },
+    reset() {
+      gap = min;
+    },
+    get gap() {
+      return gap;
+    },
+  };
+}
+
+/**
+ * When a board asks the partner for a resync. On a digest mismatch only one side — the one with
+ * the smaller player id — asks straight away: its request lists what it has, so the partner sees
+ * what *it* is missing too and asks back in the same round trip (`onAsked`). The other side asks
+ * on its own only if the mismatch is still there at the next digest (the first request got lost).
+ * So requests normally come back with something, and the backoff only bites when they don't.
+ * Each method returns true when a 'sync?' should go out now.
+ */
+export function createResync({ meId, min = PULL_MIN_MS, max = PULL_MAX_MS } = {}) {
+  const puller = createPuller({ min, max });
+  let streak = 0; // digests in a row that didn't match
+  return {
+    onDigest(verdict, from, now) {
+      if (verdict === 'match') {
+        streak = 0;
+        puller.reset();
+        return false;
+      }
+      if (verdict !== 'mismatch') return false;
+      streak++;
+      if (String(meId) > String(from) && streak < 2) return false;
+      return puller.take(now);
+    },
+    /**
+     * The partner asked us; `hasMore` = its list shows strokes (or a clear) we're missing. Being
+     * asked means the mismatch is being handled, so our own fallback request waits again.
+     */
+    onAsked(hasMore, now) {
+      streak = 0;
+      return !!hasMore && puller.take(now);
+    },
+    /** A reply arrived; `useful` = it repaired something, or the partner is asking back. */
+    onReply(useful) {
+      if (!useful) return;
+      streak = 0;
+      puller.reset();
+    },
+    /** A request went out for another reason (mount / reconnect). */
+    note(now) {
+      puller.note(now);
+    },
+    get gap() {
+      return puller.gap;
+    },
+  };
 }
 
 /**
  * Collects points of the stroke being drawn and sends them in small batches.
- * `send(msg)` gets { id, color, size, t, e, mirror, pts, start?, end? } (≤ max points).
+ * `send(msg)` gets { id, color, size, t, e, mirror, o, pts, start?, end? } (≤ max points), where
+ * `o` is the index of pts[0] within the stroke.
  */
 export function createBatcher({ send, interval = FLUSH_MS, max = MAX_CHUNK, timers = globalThis }) {
   let meta = null;
@@ -329,6 +571,15 @@ export function createBatcher({ send, interval = FLUSH_MS, max = MAX_CHUNK, time
   let start = false;
   let end = false;
   let timer = null;
+  let sent = 0; // points of the current stroke already sent
+
+  const chunk = (pts) => {
+    const msg = { ...meta, o: sent, pts };
+    sent += pts.length;
+    if (start) msg.start = true;
+    start = false;
+    return msg;
+  };
 
   const flush = () => {
     if (timer != null) {
@@ -338,17 +589,13 @@ export function createBatcher({ send, interval = FLUSH_MS, max = MAX_CHUNK, time
     if (!meta) return;
     if (!pending.length && !start && !end) return;
     while (pending.length > max) {
-      const msg = { ...meta, pts: pending.slice(0, max) };
-      if (start) msg.start = true;
-      start = false;
+      const msg = chunk(pending.slice(0, max));
       pending = pending.slice(max);
       send(msg);
     }
-    const msg = { ...meta, pts: pending };
-    if (start) msg.start = true;
+    const msg = chunk(pending);
     if (end) msg.end = true;
     pending = [];
-    start = false;
     if (end) {
       meta = null;
       end = false;
@@ -363,6 +610,7 @@ export function createBatcher({ send, interval = FLUSH_MS, max = MAX_CHUNK, time
       if (meta) this.end();
       meta = { id: m.id, color: m.color, size: m.size, t: m.t, e: m.e, mirror: m.mirror ? 1 : 0 };
       pending = pts.slice();
+      sent = 0;
       start = true;
       arm();
     },
@@ -652,12 +900,13 @@ export function pruneBoards(keep) {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * <DrawingBoard api boardKey aspect canDraw tools canClear defaultColor mirrorTool handle onInk emptyHint />
+ * <DrawingBoard api boardKey aspect canDraw tools canClear defaultColor mirrorTool handle onInk emptyHint overlay />
  *  - boardKey: unique per drawing (e.g. `${gameCid}-${round}`); changing it means a new board, so
  *    give the component `key=${boardKey}` too.
  *  - canClear(fromId): who may clear (checked for incoming 'clear' too). Clearing always asks twice.
  *  - handle: a ref; gets { board(), savePNG(opts), thumb(opts) }.
  *  - onInk(count, mine): called when the number of strokes changes.
+ *  - overlay: optional markup laid over the board (positioned by the game's CSS; no pointer events).
  */
 export function DrawingBoard(props) {
   const { api, boardKey, aspect = 0.75, canDraw = true, tools = true, mirrorTool = false, emptyHint = '', bg = PAPER } = props;
@@ -687,6 +936,7 @@ export function DrawingBoard(props) {
       saveTimer: 0,
       penTimer: 0,
       synced: false,
+      resync: createResync({ meId: api.meId }),
     };
   }
   const rt = rtRef.current;
@@ -879,6 +1129,11 @@ export function DrawingBoard(props) {
 
   // ----- network -----
   const send = (kind, data) => propsRef.current.api.fx.send(kind, { k: boardKey, ...data });
+  /** Ask the partner for what we're missing (they reply with just that). */
+  const askSync = () => {
+    rt.resync.note(Date.now());
+    send('sync?', syncRequest(rt.board));
+  };
 
   useEffect(() => {
     const players = () => propsRef.current.api.players || [];
@@ -889,8 +1144,15 @@ export function DrawingBoard(props) {
         if (!okFrom(d, from)) return;
         const before = rt.board;
         const next = applyStrokeMsg(before, d, from);
-        if (next === before) return;
         const id = String(d.id);
+        if (next === before) {
+          // Nothing new to paint, but an empty (or already-synced) last chunk still ends the stroke.
+          if (d.end && rt.open.delete(id)) {
+            schedule();
+            showPen(null, '', true);
+          }
+          return;
+        }
         if (d.end) rt.open.delete(id);
         else rt.open.set(id, Date.now());
         if (rt.baked.has(id)) rt.baseDirty = true; // a stroke we had considered finished grew
@@ -914,24 +1176,50 @@ export function DrawingBoard(props) {
       }),
       api.fx.on('sync?', (d, from) => {
         if (!okFrom(d, from)) return;
-        for (const part of syncPayloads(rt.board, boardKey, { open: rt.open })) propsRef.current.api.fx.send('sync', part);
+        // Their board is up (it mounted after ours and missed our ask): no need to ask again.
+        rt.synced = true;
+        // Their list shows strokes we never got (drawn while we were away, or lost): ask back,
+        // and say so in the reply, so their request counts as a useful one.
+        const back = rt.resync.onAsked(partnerHasMore(rt.board, d, rt.open), Date.now());
+        const parts = syncPayloads(rt.board, boardKey, { open: rt.open, have: d.have });
+        if (back) parts[0].more = 1;
+        for (const part of parts) propsRef.current.api.fx.send('sync', part);
+        if (back) send('sync?', syncRequest(rt.board));
       }),
       api.fx.on('sync', (d, from) => {
         if (!okFrom(d, from)) return;
         rt.synced = true;
         const next = mergeBoards(rt.board, d, players());
+        // They still have lines we undid: their copy of our 'undo' got lost, send it again.
+        const redo = missedUndos(rt.board, d, meId);
+        for (const id of redo) send('undo', { id });
+        // A reply that repaired something: the next problem may be asked about right away. Only
+        // requests that keep coming back empty-handed back off.
+        rt.resync.onReply(next !== rt.board || d.more === 1 || redo.length > 0);
         commit(next, { structural: true, rebuild: true });
       }),
+      api.fx.on('digest', (d, from) => {
+        if (!okFrom(d, from)) return;
+        const verdict = compareDigest(rt.board, d, rt.open.keys());
+        if (verdict === 'match') rt.synced = true;
+        if (rt.resync.onDigest(verdict, from, Date.now())) send('sync?', syncRequest(rt.board));
+      }),
     ];
-    send('sync?', {});
+    askSync();
     // The transport may not have been online yet when we asked; ask once more if nobody answered.
-    const retry = setTimeout(() => !rt.synced && send('sync?', {}), 2500);
+    const retry = setTimeout(() => !rt.synced && askSync(), 2500);
+    // Anti-entropy: a lost chunk, undo or clear shows up as a digest mismatch on one side.
+    const beat = setInterval(() => {
+      if (!propsRef.current.api.partnerOnline) return;
+      const msg = digestMessage(rt.board, rt.open.keys());
+      if (msg) send('digest', msg);
+    }, DIGEST_MS);
     // Strokes whose "end" got lost would otherwise stay "open" forever.
     const sweep = setInterval(() => {
       const t = Date.now();
       let changed = false;
       for (const [id, at] of rt.open) {
-        if (rt.active?.id === id || t - at < 4000) continue;
+        if (rt.active?.id === id || (t - at < 4000 && findStroke(rt.board, id))) continue;
         rt.open.delete(id);
         changed = true;
       }
@@ -942,6 +1230,7 @@ export function DrawingBoard(props) {
     return () => {
       offs.forEach((off) => off());
       clearTimeout(retry);
+      clearInterval(beat);
       clearInterval(sweep);
       removeEventListener('pagehide', flushSave);
       if (rt.active) finishStroke();
@@ -958,7 +1247,7 @@ export function DrawingBoard(props) {
   const online = api.partnerOnline;
   const wasOnline = useRef(online);
   useEffect(() => {
-    if (online && !wasOnline.current) send('sync?', {});
+    if (online && !wasOnline.current) askSync();
     wasOnline.current = online;
   }, [online]);
 
@@ -1050,6 +1339,7 @@ export function DrawingBoard(props) {
         onContextMenu=${(e) => e.preventDefault()}></canvas>
       ${empty && emptyHint && html`<div class="board-hint" aria-hidden="true">${emptyHint}</div>`}
       <div class="pen-dot" ref=${penRef} aria-hidden="true"><i></i><span>${partner?.name || ''}</span></div>
+      ${props.overlay}
     </div>
     ${tools && canDraw &&
     html`<div class="draw-tools">

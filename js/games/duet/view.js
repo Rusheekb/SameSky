@@ -51,6 +51,16 @@ export default function DuetView({ s, api }) {
   useOnChange(s.shuffles, () => api.effects.sound('whoosh'));
   useOnChange(!done && partnerReady && !meReady ? s.n : 0, () => api.effects.sound('heart'));
 
+  const shuffle = () => api.act({ type: 'newPrompt', from: s.prompt });
+  const setReady = (on) => {
+    api.act({ type: 'ready', on, n: s.n, from: s.prompt });
+    if (on) api.effects.sound('lock');
+  };
+  // The ready state lives in the prompt card above the board, so it's seen without scrolling even
+  // on a short phone where the finish row sits below the fold (or behind the reaction bar).
+  const partnerWaiting = partnerReady && !meReady;
+  const label = partnerWaiting ? `💫 ${pName} thinks it's finished` : meReady ? `✓ You're done · waiting for ${pName}` : 'Draw together';
+
   const save = () =>
     handle.current?.savePNG({
       caption: s.prompt,
@@ -67,9 +77,11 @@ export default function DuetView({ s, api }) {
           <p>“${s.prompt}”</p>
           <span class="chip pts-chip">+${POINTS_PER_CANVAS} together points</span>
         </div>`
-      : html`<div class="prompt-card duet-prompt">
-          <div class="prompt-text pop-in" key=${s.prompt}><small>Draw together</small><span>${s.prompt}</span></div>
-          <button class="btn btn-ghost btn-sm shuffle" onClick=${() => api.act({ type: 'newPrompt' })} aria-label="New prompt" title="New prompt">🔀</button>
+      : html`<div class=${`prompt-card duet-prompt ${partnerWaiting ? 'partner-ready' : ''} ${meReady ? 'me-ready' : ''}`}>
+          <div class="prompt-text pop-in" key=${s.prompt}><small class="ready-note" aria-live="polite" title=${label}>${label}</small><span>${s.prompt}</span></div>
+          ${partnerWaiting
+            ? html`<button class="btn btn-sm agree pop-in" onClick=${() => setReady(true)} aria-label="Agree, it's finished" title="Agree — it's finished">✓</button>`
+            : html`<button class="btn btn-ghost btn-sm shuffle" onClick=${shuffle} aria-label="New prompt" title="New prompt">🔀</button>`}
         </div>`}
 
     <div class=${`duet-board ${done ? 'framed' : ''}`}>
@@ -86,19 +98,15 @@ export default function DuetView({ s, api }) {
       ? html`<div class="stack center">
           <button class="btn" onClick=${save}>💾 Save as PNG</button>
           <${Gallery} s=${s} api=${api} />
-          <${ResultActions} api=${api} onAgain=${() => api.act({ type: 'again' })} againLabel="New canvas" />
+          <${ResultActions} api=${api} onAgain=${() => api.act({ type: 'again', n: s.n })} againLabel="New canvas" />
         </div>`
       : html`<div class="stack center duet-finish">
-          ${partnerReady && !meReady && html`<p class="nudge-note pop-in">${pName} thinks it's finished 💫 Agree?</p>`}
           ${meReady
-            ? html`<${LockStatus} api=${api} locked=${s.ready} labels=${{ done: 'done', waiting: 'still drawing…' }} />
-                <p class="muted small">Waiting for ${pName} to add their last touches…</p>
-                <button class="btn" onClick=${() => api.act({ type: 'ready', on: false })}>✏️ Keep drawing</button>`
-            : html`<button class=${`btn btn-primary btn-lg ${partnerReady ? 'glow-pulse' : ''}`} disabled=${!ink}
-                onClick=${() => {
-                  api.act({ type: 'ready', on: true });
-                  api.effects.sound('lock');
-                }}>We're done! ✨</button>
+            ? html`<div class="row center wrap waiting-row">
+                  <${LockStatus} api=${api} locked=${s.ready} labels=${{ done: 'done', waiting: 'still drawing…' }} />
+                  <button class="btn" onClick=${() => setReady(false)}>✏️ Keep drawing</button>
+                </div>`
+            : html`<button class=${`btn btn-primary btn-lg ${partnerReady ? 'glow-pulse' : ''}`} disabled=${!ink} onClick=${() => setReady(true)}>We're done! ✨</button>
                 <p class="muted small">${ink ? (partnerReady ? 'Tap to frame your masterpiece 🖼️' : 'You both tap it when it’s finished') : 'Draw something first — any squiggle counts.'}</p>`}
         </div>`}
   </section>`;

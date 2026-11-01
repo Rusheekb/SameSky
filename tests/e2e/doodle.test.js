@@ -131,20 +131,37 @@ test('Doodle Dash: live drawing, guesses, a correct answer, four rounds and the 
     await t.shot(a, 'doodle-draw-a');
     await t.shot(b, 'doodle-draw-b');
 
+    // ---- on a laptop, the guesses and the drawer's Skip stay clear of the fixed reaction bar
+    for (const p of [a, b]) await p.setViewportSize({ width: 1280, height: 800 });
+    await a.waitForTimeout(300);
+    for (const [p, sel] of [[a, '.skip-btn'], [a, '.guesses'], [b, '.answer-box'], [b, '.guesses']]) {
+      const [el, bar] = await Promise.all([p.locator(`.game ${sel}`).boundingBox(), p.locator('.reactions').boundingBox()]);
+      assert.ok(el.y + el.height <= bar.y, `${sel} (bottom ${el.y + el.height}) above the reaction bar (${bar.y}) at 1280×800`);
+    }
+    await t.shot(a, 'doodle-draw-a-laptop');
+    for (const p of [a, b]) await p.setViewportSize({ width: 390, height: 844 });
+
     // ---- a typo-level near miss: "so close!" for both
     const close = nearMiss(word);
     if (close) {
       await b.getByPlaceholder('Type a guess…').fill(close);
       await b.getByPlaceholder('Type a guess…').press('Enter');
       await a.locator('.bubble.close', { hasText: 'so close' }).waitFor();
-      await b.getByText('So close!').first().waitFor();
+      await b.locator('.close-pop', { hasText: 'So close!' }).waitFor();
+      await a.locator('.close-pop', { hasText: `Blair is so close: “${close}”` }).waitFor();
+      await t.shot(b, 'doodle-so-close-b');
     }
 
-    // ---- correct guess -> both see the result and the drawing stays
+    // ---- correct guess (right after the near miss) -> both see the result and the drawing stays
     await b.getByPlaceholder('Type a guess…').fill(word.toUpperCase());
     await b.getByRole('button', { name: 'Guess' }).click();
     await a.locator('.result-word', { hasText: word }).waitFor();
     await b.locator('.result-word', { hasText: word }).waitFor();
+    // The near-miss pop-up belonged to the drawing phase: nothing "so close" lingers over the result.
+    for (const p of [a, b]) {
+      assert.equal(await p.locator('.close-pop').count(), 0, 'no stale "So close" on the result');
+      assert.equal(await p.locator('#toast.show', { hasText: /so close/i }).count(), 0, 'no stale "So close" toast');
+    }
     await b.getByText(/You got it in \d+s/).waitFor();
     await a.getByText(/Blair got it in \d+s/).waitFor();
     assert.ok((await inkCount(b)) > 60, 'drawing stays on screen for the result');

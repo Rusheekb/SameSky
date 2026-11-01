@@ -355,10 +355,40 @@
 }
 .game.story .sc-left {
   color: var(--muted);
+  min-width: 0;
+}
+.game.story .sc-compose-foot .btn {
+  flex: none;
+  white-space: nowrap;
 }
 .game.story .sc-left.near {
   color: var(--gold);
   font-weight: 700;
+}
+.game.story .sc-left.sc-sending {
+  color: #cdb8ff;
+  font-weight: 700;
+}
+.game.story .sc-left.sc-restored {
+  color: var(--gold);
+  font-weight: 700;
+}
+.game.story .sc-compose textarea[readonly] {
+  opacity: 0.75;
+}
+/* A line that hasn't shown up in the story yet: gentle, not alarming. */
+.game.story .sc-stall {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  background: rgba(255, 212, 121, 0.12);
+  border: 1px solid rgba(255, 212, 121, 0.4);
+  animation: fade-up 0.3s ease both;
 }
 
 .game.story .sc-tools {
@@ -507,6 +537,15 @@
   margin: 0;
   text-align: center;
 }
+.game.story .sc-sugg-ai:not(.sel) {
+  border-color: rgba(182, 156, 255, 0.7);
+  background: rgba(182, 156, 255, 0.16);
+}
+.game.story .sc-late {
+  margin: 0;
+  text-align: center;
+  color: #cdb8ff;
+}
 .game.story .sc-narrator {
   gap: 10px;
   padding: 14px;
@@ -517,6 +556,9 @@
 }
 .game.story .sc-resume {
   align-self: center;
+}
+.game.story .sc-unsent {
+  margin: 0 0 -6px;
 }
 
 /* ---------------------------------------------------------------- keepsake */

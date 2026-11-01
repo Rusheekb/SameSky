@@ -10,7 +10,7 @@ const PASSCODE_KEY = 'aiPasscode';
 export class AiError extends Error {
   constructor(code, message) {
     super(message || code);
-    this.code = code; // 'unavailable' | 'passcode' | 'rate_limited' | 'bad_output' | 'network' | 'server'
+    this.code = code; // 'unavailable' | 'passcode' | 'origin' | 'rate_limited' | 'bad_output' | 'network' | 'server'
   }
 }
 
@@ -55,7 +55,8 @@ export async function aiGenerate(config, task, params = {}, { timeoutMs = 45000 
   } catch {
     /* non-JSON */
   }
-  if (res.status === 401 || res.status === 403) throw new AiError('passcode', body?.error || 'Wrong AI passcode');
+  if (res.status === 401) throw new AiError('passcode', body?.error || 'Wrong AI passcode');
+  if (res.status === 403) throw new AiError('origin', body?.error || 'This website is not allowed to use the AI (check ALLOWED_ORIGINS)');
   if (res.status === 429) throw new AiError('rate_limited', body?.error || 'Slow down a little');
   if (!res.ok) throw new AiError('server', body?.error || `AI error (${res.status})`);
   if (!body || typeof body !== 'object' || !body.result) throw new AiError('bad_output', 'AI returned nothing usable');

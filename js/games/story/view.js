@@ -1,10 +1,11 @@
 import { html, useState, useEffect, useRef } from '../../ui/h.js';
 import { GameHeader, ResultActions, WaitingDots, Avatar, useOnChange } from '../../ui/components.js';
-import { meta, MAX_LINE, MAX_TITLE, MAX_TWISTS, MIN_LINES, MAX_LINES, playerLines, storyText } from './logic.js';
+import { meta, MAX_LINE, MAX_TITLE, MAX_TWISTS, MIN_LINES, MAX_LINES, playerLines, storyText, cleanLine, reconcileDraft } from './logic.js';
 
 const TYPING_TTL = 4000; // a "typing" ping keeps the indicator on this long
 const PING_EVERY = 1500; // send at most one ping per this many ms
 const CONJURE_TTL = 20000;
+const STALL_MS = 5000; // a line that hasn't shown up in the story by then gets a gentle "Send again"
 const ALT_COLORS = ['#6ec8ff', '#ffb86b'];
 const hasWords = (t) => /[\p{L}\p{N}]/u.test(t || '');
 
@@ -172,48 +173,77 @@ function TurnBanner({ s, api, typing }) {
   </div>`;
 }
 
-// Unsent drafts survive the composer unmounting (e.g. your partner taps "The End" mid-sentence
-// and then "Keep writing"). Local to this device, never sent anywhere.
-const drafts = new Map();
-
-function Composer({ s, api }) {
-  const draftKey = `${s.story}:${s.title}`;
-  const [text, setTextState] = useState(() => drafts.get(draftKey) || '');
-  const setText = (v) => {
-    setTextState(v);
-    if (v) drafts.set(draftKey, v);
-    else drafts.delete(draftKey);
+// Your line lives in a draft owned by StoryView (one per game, local to this device, never sent
+// anywhere until you tap "Add my line"). It is NOT cleared on submit: it stays until the story
+// shows the line (reconcileDraft), so a line that is lost on the way or loses a race (your partner
+// taps "The End" at the same moment) comes back in the box — e.g. after "Keep writing".
+function Composer({ s, api, draft }) {
+  const [, rerender] = useState(0);
+  const d = draft.current;
+  const update = (patch) => {
+    draft.current = { ...draft.current, ...patch };
+    rerender((x) => x + 1);
   };
   const ref = useRef(null);
   const ping = usePinger(api, 'typing');
   useEffect(() => {
     ref.current?.focus({ preventScroll: true });
   }, []);
+  // Sent but not in the story yet: "Adding…" for a moment, then a gentle hint + "Send again".
+  const sentAt = d.sent?.at || 0;
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    setStalled(false);
+    if (!sentAt) return undefined;
+    const h = setTimeout(() => setStalled(true), Math.max(0, STALL_MS - (Date.now() - sentAt)));
+    return () => clearTimeout(h);
+  }, [sentAt]);
+  const inFlight = !!d.sent && !stalled;
+  const text = d.text;
+  const ready = hasWords(cleanLine(text));
   const first = s.lines.length === 0;
   const send = (e) => {
     e?.preventDefault();
-    const v = text.trim();
-    if (!hasWords(v)) return;
-    api.act({ type: 'line', text: v });
+    const v = cleanLine(draft.current.text);
+    const prev = draft.current.sent;
+    if (!hasWords(v) || (prev && !stalled)) return; // read the ref: a double Enter can beat the re-render
+    // Mark it sent before dispatching: when we lead, the state (and reconcile) updates at once.
+    update({
+      restored: false,
+      sent: { from: prev ? prev.from : s.lines.length, texts: [...(prev ? prev.texts.filter((t) => t !== v) : []), v].slice(-4), at: Date.now() },
+    });
+    api.act({ type: 'line', text: v, slot: playerLines(s.lines) });
     api.effects.sound('tap');
-    setText('');
   };
   const left = MAX_LINE - text.length;
   const color = authorColors(api)[api.meId];
+  const partnerName = api.partner?.name || 'your partner';
+  const note = inFlight
+    ? html`<small class="sc-left sc-sending">Adding it to the story…</small>`
+    : d.restored && ready && !d.sent
+      ? html`<small class="sc-left sc-restored">↺ Didn’t make it in — still here</small>`
+      : html`<small class=${`sc-left ${left <= 20 ? 'near' : ''}`}>${left <= 40 ? `${left} characters left` : 'One or two sentences'}</small>`;
   return html`<form class="sc-compose" onSubmit=${send} style=${`--pc:${color}`}>
     <div class="sc-compose-label" aria-live="polite"><i aria-hidden="true">✍️</i><span><b>Your turn</b> — what happens next?</span></div>
-    <textarea class="input" ref=${ref} rows="2" maxLength=${MAX_LINE} value=${text} aria-label="Your next line"
+    <textarea class="input" ref=${ref} rows="2" maxLength=${MAX_LINE} value=${text} aria-label="Your next line" readOnly=${inFlight}
       enterkeyhint="send" placeholder=${first ? 'Start us off — what happens next?' : 'Add the next sentence (or two)…'}
       onInput=${(e) => {
-        setText(e.currentTarget.value);
+        update({ text: e.currentTarget.value, restored: false });
         ping();
       }}
       onKeyDown=${(e) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) send(e);
       }}></textarea>
-    <div class="sc-compose-foot">
-      <small class=${`sc-left ${left <= 20 ? 'near' : ''}`} aria-live="polite">${left <= 40 ? `${left} characters left` : 'One or two sentences'}</small>
-      <button class="btn btn-primary" type="submit" disabled=${!hasWords(text)}>Add my line ✍️</button>
+    ${d.sent &&
+    stalled &&
+    html`<p class="sc-stall" role="status">
+      <span aria-hidden="true">📶</span><span>This hasn’t reached ${partnerName} yet — your line is safe here. Send it again?</span>
+    </p>`}
+    <div class="sc-compose-foot" aria-live="polite">
+      ${note}
+      <button class="btn btn-primary" type="submit" disabled=${!ready || inFlight} aria-busy=${inFlight}>
+        ${inFlight ? 'Adding…' : d.sent ? 'Send again ↻' : 'Add my line ✍️'}
+      </button>
     </div>
   </form>`;
 }
@@ -251,8 +281,15 @@ function Tools({ s, api, busy, conjuring, onTwist }) {
 
 // ------------------------------------------------------------------ ending
 
+/** What the narrator's late reply added (see the 'narrate' action). */
+function lateNote(e) {
+  const parts = [e.pick && 'its title is up first', e.epilogue && 'its closing line will end your book'].filter(Boolean);
+  return parts.join(', and ');
+}
+
 function TitleForm({ s, api, head }) {
   const [val, setVal] = useState('');
+  const late = s.ending.narrator === 'late';
   const ping = usePinger(api, 'naming');
   const naming = usePartnerPing(api, 'naming', TYPING_TTL, s.ending.at);
   const submit = (e) => {
@@ -273,22 +310,25 @@ function TitleForm({ s, api, head }) {
       <button class="btn btn-primary" type="submit" disabled=${!hasWords(val)}>Bind it 📕</button>
     </div>
     <div class="sc-suggest" role="group" aria-label="Suggested titles">
-      ${s.ending.suggest.map(
-        (t) => html`<button type="button" key=${t} class=${`sc-sugg ${val === t ? 'sel' : ''}`} aria-pressed=${val === t}
+      ${s.ending.suggest.map((t) => {
+        const ai = late && t === s.ending.pick;
+        return html`<button type="button" key=${t} class=${`sc-sugg ${val === t ? 'sel' : ''} ${ai ? 'sc-sugg-ai' : ''}`} aria-pressed=${val === t}
+          title=${ai ? 'The narrator’s idea' : undefined}
           onClick=${() => {
             setVal(t);
             ping();
             api.effects.sound('tap');
-          }}>${t}</button>`,
-      )}
+          }}>${ai && html`<span aria-hidden="true">🪶 </span>`}${t}</button>`;
+      })}
     </div>
+    ${late && html`<p class="small sc-late pop-in" role="status">🪶 The narrator caught up: ${lateNote(s.ending)}.</p>`}
     <p class="muted small sc-naming" aria-live="polite">
       ${naming ? html`✍️ <b>${api.partner?.name || 'Your partner'}</b> is typing a title too…` : 'Either of you can bind it — first one wins.'}
     </p>
   </form>`;
 }
 
-function Ending({ s, api }) {
+function Ending({ s, api, unsent }) {
   const e = s.ending;
   const full = playerLines(s.lines) >= MAX_LINES;
   const head = html`<div class="sc-ending-head">
@@ -302,9 +342,12 @@ function Ending({ s, api }) {
           ${head}
           <div class="sc-narrator-icon" aria-hidden="true">🪶</div>
           <${WaitingDots} text=${e.by === api.meId ? 'The narrator is writing your ending' : `${nameOf(api, e.by)} asked the narrator for an ending`} />
-          <button class="btn btn-ghost btn-sm" onClick=${() => api.act({ type: 'manual' })}>We’ll name it ourselves</button>
+          <button class="btn btn-ghost btn-sm" onClick=${() => api.act({ type: 'manual', at: e.at })}>We’ll name it ourselves</button>
         </div>`
       : html`<${TitleForm} s=${s} api=${api} head=${head} key=${e.at} />`}
+    ${!full &&
+    unsent &&
+    html`<p class="muted small center sc-unsent" role="status">✍️ Your unfinished line is saved — “Keep writing” to add it.</p>`}
     ${!full && html`<button class="btn btn-ghost btn-sm sc-resume" onClick=${() => api.act({ type: 'resume' })}>← Keep writing</button>`}
   </div>`;
 }
@@ -354,6 +397,10 @@ function Keepsake({ s, api, busy, conjuring, onAgain }) {
 
 export default function StoryView({ s, api }) {
   const [busy, setBusy] = useState(null); // 'twist' | 'again' while an AI call is in flight
+  // Your line in the making (see Composer): reconciled with every new state, so it is emptied once
+  // the story shows it and kept (and offered again) when the story moved on without it.
+  const draft = useRef(null);
+  draft.current = reconcileDraft(draft.current, s, api.meId);
   const alive = useRef(true);
   useEffect(() => () => (alive.current = false), []);
   const n = playerLines(s.lines);
@@ -378,12 +425,16 @@ export default function StoryView({ s, api }) {
   });
 
   // Whoever wrote "The End" asks the narrator (AI) for a title + epilogue. If that fails (or AI
-  // is off on this device), both of you get the title form instead.
+  // is off on this device), both of you get the title form instead. The call belongs to this
+  // ending (`at`): it is only dropped if you keep writing or the book gets bound. If one of you
+  // tapped "We'll name it ourselves" meanwhile, a late reply still arrives — as the first title
+  // idea + the closing line (see 'narrate'), never by snatching the form away. The AI client gives
+  // up after 45 s, before the 50 s fallback (NARRATOR_WAIT), so nobody waits on a lost call.
   useEffect(() => {
     const e = s.ending;
     if (s.phase !== 'ending' || !e || e.narrator !== 'pending' || e.by !== api.meId) return undefined;
     if (!api.ai.enabled) {
-      api.act({ type: 'manual' });
+      api.act({ type: 'manual', at: e.at });
       return undefined;
     }
     let live = true;
@@ -391,13 +442,15 @@ export default function StoryView({ s, api }) {
       .generate('story_end', { story: storyText(s).slice(-2000) })
       .then((r) => {
         if (!live) return;
-        api.act({ type: 'finish', title: typeof r?.title === 'string' ? r.title : '', epilogue: typeof r?.epilogue === 'string' ? r.epilogue : '' });
+        const title = typeof r?.title === 'string' ? r.title : '';
+        const epilogue = typeof r?.epilogue === 'string' ? r.epilogue : '';
+        api.act({ type: 'narrate', at: e.at, title, epilogue });
       })
-      .catch(() => live && api.act({ type: 'manual' }));
+      .catch(() => live && api.act({ type: 'manual', at: e.at }));
     return () => {
       live = false;
     };
-  }, [s.phase, s.ending?.at, s.ending?.narrator]);
+  }, [s.phase, s.ending?.at]);
 
   const twist = async () => {
     if (busy) return;
@@ -450,9 +503,9 @@ export default function StoryView({ s, api }) {
             mode=${s.phase === 'ending' ? 'ending' : myTurn ? 'writer' : 'waiter'} />
           ${s.phase === 'writing'
             ? html`${myTurn
-                  ? html`<${Composer} s=${s} api=${api} key=${`c${s.story}`} />`
+                  ? html`<${Composer} s=${s} api=${api} draft=${draft} key=${`c${s.story}`} />`
                   : html`<${TurnBanner} s=${s} api=${api} typing=${partnerWriting} />`}
                 <${Tools} s=${s} api=${api} busy=${busy} conjuring=${conjuring} onTwist=${twist} />`
-            : html`<${Ending} s=${s} api=${api} />`}`}
+            : html`<${Ending} s=${s} api=${api} unsent=${hasWords(cleanLine(draft.current.text))} />`}`}
   </section>`;
 }

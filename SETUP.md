@@ -86,8 +86,9 @@ meantime the game offers a "Try a direct connection instead" button.
    `same-sky`). Copy it once — don't paste it anywhere except step 3.
    Then **Settings → Limits** (or Billing) and set a small monthly spend limit, e.g. $5.
 2. **Pick a passcode** only the two of you know — a few words, at least 10 characters, e.g.
-   `pancakes-under-the-same-moon`. You'll type it once on each device. Avoid a single common
-   word like `iloveyou`: anyone who finds your site could try guessing it.
+   `pancakes-under-the-same-moon`. You'll type it once on each device. The function refuses
+   passcodes shorter than 10 characters or made of a single word (like `iloveyou2024`), and it
+   pauses itself for a few minutes after 30 wrong guesses, so nobody can brute-force it.
 3. **Store both as Supabase secrets** — in the Supabase dashboard: **Edge Functions → Secrets**
    (a.k.a. *Manage secrets*) → add:
    - `ANTHROPIC_API_KEY` = your key
