@@ -1,5 +1,6 @@
 import { html, useState, useEffect, useRef } from '../../ui/h.js';
 import { GameHeader, LockStatus, ResultActions, WaitingDots, Avatar, useOnChange } from '../../ui/components.js';
+import { cleanText } from '../../lib/util.js';
 import { meta, LEVELS, MAX_CARDS, MAX_ANSWER, MAX_FAVS } from './logic.js';
 
 const nameOf = (api, id) => (id === api.me.id ? 'You' : api.player(id)?.name || 'Your partner');
@@ -42,16 +43,29 @@ function Card({ s, api }) {
   </div>`;
 }
 
+// The draft is never cleared here. This box unmounts once the state shows the answer sealed (and
+// is keyed by card, so a new card starts empty), so a submit that is lost or rejected on the way
+// keeps every word: "Seal it" comes back after a moment to try again.
+const RESEAL_MS = 4000;
+
 function WriteBox({ s, api }) {
   const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
   const lastSent = useRef(0);
   const ref = useRef(null);
   useEffect(() => ref.current?.focus({ preventScroll: true }), []);
+  useEffect(() => {
+    if (!sending) return undefined;
+    const h = setTimeout(() => setSending(false), RESEAL_MS);
+    return () => clearTimeout(h);
+  }, [sending]);
+  // Same cleaning as the reducer, so text it would reject (only spaces) never looks sendable.
+  const ready = !!cleanText(text, MAX_ANSWER);
   const submit = (e) => {
     e.preventDefault();
-    const v = text.trim();
-    if (!v) return;
-    api.act({ type: 'answer', card: s.card.id, text: v });
+    if (!ready || sending) return;
+    setSending(true);
+    api.act({ type: 'answer', card: s.card.id, text: cleanText(text, MAX_ANSWER) });
     api.effects.sound('lock');
   };
   return html`<form class="dt-write" onSubmit=${submit}>
@@ -67,7 +81,7 @@ function WriteBox({ s, api }) {
       }}></textarea>
     <div class="dt-write-foot">
       <small class=${`muted ${text.length > MAX_ANSWER - 20 ? 'dt-near' : ''}`}>${text.length}/${MAX_ANSWER}</small>
-      <button class="btn btn-primary" type="submit" disabled=${!text.trim()}>Seal it 💌</button>
+      <button class="btn btn-primary" type="submit" disabled=${!ready || sending} aria-busy=${sending}>${sending ? 'Sealing…' : 'Seal it 💌'}</button>
     </div>
   </form>`;
 }

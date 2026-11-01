@@ -4,6 +4,8 @@ import * as tot from '../../js/games/thisorthat/logic.js';
 import { DILEMMAS, VIBES } from '../../js/content/thisorthat.js';
 import { gameHarness } from '../helpers/sim.js';
 import { seededRandom } from '../../js/lib/util.js';
+import * as room from '../../js/core/state.js';
+import { GAMES } from '../../js/games/index.js';
 
 const key = (it) => `${it.a}|${it.b}`;
 
@@ -203,8 +205,9 @@ test('many replays never run dry or repeat inside one game', () => {
     assert.equal(h.s.done, true);
     h.act('p1', { type: 'again' });
   }
-  assert.ok(h.s.used.length <= 60);
+  assert.ok(h.s.used.length <= DILEMMAS.length);
   assert.ok(h.s.highlights.length <= 6);
+  assert.ok(JSON.stringify(h.s).length < 4000, 'state stays small with the full recency list');
 });
 
 test('AI items are validated, deduped and topped up from the bank', () => {
@@ -259,4 +262,205 @@ test('partner choices stay in state only for the authority; view-level secrecy r
   h.act('p1', { type: 'pick', slot: 'guess', choice: 'b' });
   assert.equal(h.s.rounds.length, 0);
   assert.equal(h.s.phase, 'pick');
+});
+
+// ------------------------------------------------------------------ helpers for the fixes below
+
+const bankIndex = new Map(DILEMMAS.map((d, i) => [key(d), i]));
+
+/** Play a whole game (any picks) and tap "New dilemmas"; returns the next game's item keys. */
+function playThroughAndAgain(h) {
+  for (let r = 1; r <= 10; r++) {
+    playRound(h, ['a', 'b'], ['b', 'a']);
+    h.act('p1', { type: 'next', round: r });
+  }
+  assert.equal(h.s.done, true);
+  h.act('p2', { type: 'again' });
+  return h.s.items.map(key);
+}
+
+function harnessFor(vibe, seed) {
+  const h = gameHarness(tot, { seed });
+  const base = h.ctx.bind(h);
+  h.ctx = (by) => ({ ...base(by), settings: { vibe, ai: false, aboutUs: '' } });
+  h.s = tot.init(h.ctx('p1'), {});
+  return h;
+}
+
+// ------------------------------------------------------------------ deal order (rules#5)
+
+test('deal order: every unseen dilemma comes before any repeat, across all vibes', () => {
+  for (const vibe of VIBES) {
+    for (const seed of [1, 7, 42]) {
+      const h = harnessFor(vibe, seed);
+      const seenAt = new Map(); // key -> game number it was last dealt in
+      let game = 1;
+      let items = h.s.items.map(key);
+      const record = () => items.forEach((k) => seenAt.set(k, game));
+      record();
+      // 108 dilemmas / 10 per game: the first 10 games never repeat anything.
+      for (game = 2; game <= Math.floor(DILEMMAS.length / 10); game++) {
+        items = playThroughAndAgain(h);
+        const repeats = items.filter((k) => seenAt.has(k));
+        assert.deepEqual(repeats, [], `${vibe}/${seed} game ${game}: repeats while unseen ones remain`);
+        assert.equal(new Set(items).size, 10);
+        record();
+      }
+      // Game 11: the last unseen dilemmas, topped up with the ones seen longest ago (game 1).
+      const unseenLeft = DILEMMAS.map(key).filter((k) => !seenAt.has(k));
+      items = playThroughAndAgain(h);
+      for (const k of unseenLeft) assert.ok(items.includes(k), `${vibe}/${seed}: unseen "${k}" dealt before repeats`);
+      for (const k of items.filter((x) => seenAt.has(x))) assert.equal(seenAt.get(k), 1, `${vibe}/${seed}: repeat "${k}" is from the oldest game`);
+      record();
+      // From now on everything is a repeat, but never from the game just played.
+      for (game = 12; game <= 24; game++) {
+        const prev = new Set(items);
+        items = playThroughAndAgain(h);
+        assert.equal(items.filter((k) => prev.has(k)).length, 0, `${vibe}/${seed} game ${game}: repeat from the previous game`);
+        assert.equal(new Set(items).size, 10, 'no repeats inside one game');
+        record();
+      }
+    }
+  }
+});
+
+test('deal order: tonight\'s vibe keeps its share while it has unseen dilemmas, other vibes fill the rest', () => {
+  for (const vibe of VIBES) {
+    const h = harnessFor(vibe, 9);
+    const inVibe = DILEMMAS.filter((d) => d.vibe === vibe).length;
+    let shown = 0; // in-vibe dilemmas dealt so far
+    for (let game = 1; game <= 6; game++) {
+      const items = game === 1 ? h.s.items.map(key) : playThroughAndAgain(h);
+      const n = items.filter((k) => DILEMMAS[bankIndex.get(k)].vibe === vibe).length;
+      const unseenVibe = inVibe - shown;
+      assert.equal(n, Math.min(6, unseenVibe), `${vibe} game ${game}: ${n} from the vibe with ${unseenVibe} unseen`);
+      shown += n;
+    }
+  }
+});
+
+test('AI dilemmas that are also in the bank are not dealt twice in one game', () => {
+  const dupes = [
+    { a: 'breakfast in bed', b: 'Fancy brunch out' }, // bank item, other spelling
+    { a: 'Sleep in till noon', b: 'Sunrise hike' }, // bank item, sides swapped
+    { a: 'Pet dragon', b: 'Pet dinosaur' },
+  ];
+  for (let seed = 1; seed <= 60; seed++) {
+    const g = gameHarness(tot, { seed, opts: { content: { items: dupes } } });
+    const keys = g.s.items.map((it) => [it.a, it.b].map((x) => x.toLowerCase()).sort().join('|'));
+    assert.equal(new Set(keys).size, 10, `seed ${seed}: ${keys.join(', ')}`);
+  }
+});
+
+// ------------------------------------------------------------------ content reads right for both (rules#6)
+
+test('content: no I/you wording and no role pairs where the same pick means opposite wants', () => {
+  for (const d of DILEMMAS) {
+    for (const side of [d.a, d.b]) {
+      // Shown under "You'd pick…" and "<partner> would pick…": I/you would flip meaning between them.
+      assert.ok(!tot.PERSONAL.test(side), `"${side}" points at a different person on each screen`);
+    }
+    // Complementary roles: both picking "Big spoon" is a clash, not a match.
+    assert.ok(!/\b(big|little) spoon\b|\bdo the chasing\b|\bbe chased\b|\bkiss(es)? (me|you) first\b/i.test(`${d.a} | ${d.b}`), `role pair: ${key(d)}`);
+    assert.ok(!/^live near family$/i.test(d.a), 'whose family?');
+  }
+  assert.ok(tot.PERSONAL.test('You kiss me first') && tot.PERSONAL.test('I kiss you first') && tot.PERSONAL.test("I'd rather"));
+  assert.ok(!tot.PERSONAL.test('A thousand little I-love-yous') && !tot.PERSONAL.test('Wi-Fi') && !tot.PERSONAL.test('Mines'));
+});
+
+test('AI dilemmas with I/you wording are dropped (they read wrongly on one of the two screens)', () => {
+  const content = {
+    items: [
+      { a: 'You kiss me first', b: 'I kiss you first' },
+      { a: 'Cook for you', b: 'Order in' },
+      { a: 'Matching pyjamas', b: 'Swapping hoodies' },
+    ],
+  };
+  const h = gameHarness(tot, { opts: { content } });
+  assert.deepEqual(tot.validItems(content), [{ a: 'Matching pyjamas', b: 'Swapping hoodies' }]);
+  assert.deepEqual(h.s.items[0], { a: 'Matching pyjamas', b: 'Swapping hoodies' });
+  assert.ok(h.s.items.every((it) => !tot.PERSONAL.test(it.a) && !tot.PERSONAL.test(it.b)));
+});
+
+// ------------------------------------------------------------------ leaving mid-game (rules#2)
+
+function deepFreeze(o) {
+  if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+    Object.freeze(o);
+    for (const v of Object.values(o)) deepFreeze(v);
+  }
+  return o;
+}
+
+test('summarize: running compatibility and notable rounds so far; pure; finished games keep their own', () => {
+  const h = gameHarness(tot);
+  const ctx = h.ctx(null);
+  assert.deepEqual(tot.summarize(h.s, ctx), { summary: '', highlights: [] }, 'nothing revealed yet');
+  // Round 1 same + both right, round 2 split, round 3 same; round 4 half-picked (hidden).
+  playRound(h, ['a', 'a'], ['a', 'a']);
+  h.act('p1', { type: 'next', round: 1 });
+  playRound(h, ['a', 'a'], ['b', 'b']);
+  h.act('p1', { type: 'next', round: 2 });
+  playRound(h, ['b', 'a'], ['b', 'b']);
+  h.act('p1', { type: 'next', round: 3 });
+  h.act('p1', { type: 'pick', slot: 'mine', choice: 'a' });
+  h.act('p1', { type: 'pick', slot: 'guess', choice: 'a' });
+  const before = JSON.stringify(h.s);
+  const sum = tot.summarize(deepFreeze(h.s), ctx);
+  assert.equal(JSON.stringify(h.s), before, 'never mutates');
+  assert.equal(sum.summary, '67% in tune after 3 of 10 · Alex read 1/3, Blair read 2/3');
+  const [it1, it2, it3] = h.s.items;
+  assert.deepEqual(sum.highlights, [`Both picked: ${it1.a} over ${it1.b}`, `Differed on: ${it2.a} vs ${it2.b}`, `Both picked: ${it3.b} over ${it3.a}`]);
+  assert.deepEqual(tot.summarize(h.s, ctx), sum, 'deterministic');
+
+  // Mid-reveal counts the round on screen.
+  playRound(h, ['b', 'a'], ['a', 'a']); // p1 already locked: p2 completes round 4
+  assert.equal(h.s.phase, 'reveal');
+  assert.match(tot.summarize(h.s, ctx).summary, /^75% in tune after 4 of 10 · /);
+
+  // Finished: the end-screen summary and highlights are used as they are.
+  for (let r = 4; r <= 10; r++) {
+    if (r > 4) playRound(h, ['a', 'a'], ['a', 'a']);
+    h.act('p1', { type: 'next', round: r });
+  }
+  assert.equal(h.s.done, true);
+  assert.deepEqual(tot.summarize(h.s, ctx), { summary: h.s.summary, highlights: h.s.highlights });
+
+  // "New dilemmas", then leave after two rounds: the earlier game stays in the line.
+  h.act('p2', { type: 'again' });
+  assert.deepEqual(tot.summarize(h.s, ctx), { summary: h.s.summary, highlights: h.s.highlights }, 'nothing new yet');
+  playRound(h, ['a', 'a'], ['a', 'a']);
+  h.act('p1', { type: 'next', round: 1 });
+  playRound(h, ['a', 'b'], ['b', 'a']);
+  const again = tot.summarize(h.s, ctx);
+  assert.equal(again.summary, `${h.s.summary} · then 50% in tune on 2 more`);
+  assert.ok(again.highlights.length <= 6);
+  assert.equal(again.highlights.at(-1), `Differed on: ${h.s.items[1].a} vs ${h.s.items[1].b}`);
+  for (const x of again.highlights) assert.ok(x.length <= 200);
+
+  for (const bad of [null, undefined, {}, { rounds: 'x' }]) assert.deepEqual(tot.summarize(bad, ctx), {});
+});
+
+test('leaving through ✕ mid-game keeps the running result in the night recap', () => {
+  const ctx = { now: 1_700_000_000_000, random: seededRandom(4), games: GAMES, online: new Set(['p1', 'p2']) };
+  let st = room.initialState('R');
+  st = room.reduce(st, { type: 'join', by: 'p1', player: { id: 'p1', name: 'Alex' } }, ctx);
+  st = room.reduce(st, { type: 'join', by: 'p2', player: { id: 'p2', name: 'Blair' } }, { ...ctx, now: ctx.now + 1 });
+  st = room.reduce(st, { type: 'startGame', by: 'p1', id: 'thisorthat' }, ctx);
+  const g = (by, a) => (st = room.reduce(st, { type: 'game', by, a }, ctx));
+  for (let r = 1; r <= 7; r++) {
+    for (const p of ['p1', 'p2']) {
+      g(p, { type: 'pick', slot: 'mine', choice: r <= 5 ? 'a' : p === 'p1' ? 'a' : 'b' });
+      g(p, { type: 'pick', slot: 'guess', choice: 'a' });
+    }
+    g('p1', { type: 'next', round: r });
+  }
+  st = room.reduce(st, { type: 'endGame', by: 'p1' }, ctx);
+  const entry = st.history.at(-1);
+  assert.equal(entry.id, 'thisorthat');
+  assert.equal(entry.summary, '71% in tune after 7 of 10 · Alex read 5/7, Blair read 7/7');
+  assert.ok(entry.highlights.length >= 2 && entry.highlights.length <= 6);
+  assert.ok(entry.highlights.some((x) => x.startsWith('Both picked: ')));
+  assert.ok(entry.highlights.some((x) => x.startsWith('Differed on: ')));
+  assert.equal(entry.points, 5 * 3 + 2 * 1);
 });

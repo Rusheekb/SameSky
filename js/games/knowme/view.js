@@ -84,7 +84,9 @@ export default function KnowMeView({ s, api }) {
             <p class="big">${showValue(s.q, mine)}</p>
             <${WaitingDots} text=${partnerLocked ? 'Flipping' : iAmSubject ? `Waiting for ${guesserName} to guess` : `Waiting for ${subjectName} to answer`} />
           </div>`
-        : html`<${Picker} q=${s.q} sel=${sel} choose=${choose} lock=${lock} iAmSubject=${iAmSubject} subjectName=${subjectName} />`}
+        : // Keyed by question: a skip (same round, new question) remounts it, so text half-typed
+          // for the old question never gets locked in as the answer to the new one.
+          html`<${Picker} key=${qKey} q=${s.q} sel=${sel} choose=${choose} lock=${lock} iAmSubject=${iAmSubject} subjectName=${subjectName} />`}
       <${LockStatus} api=${api} locked=${Object.fromEntries(Object.keys(s.answers).map((id) => [id, true]))} />
       ${s.skips < MAX_SKIPS && s.spares.length > 0 &&
       html`<button class="btn btn-ghost km-skip" onClick=${() => api.act({ type: 'skip', q: s.q.id })}>
@@ -96,9 +98,9 @@ export default function KnowMeView({ s, api }) {
     html`<div class="stack center km-reveal">
       ${prompt(true)}
       <div class="km-cards" key=${qKey}>
-        <${FlipCard} player=${api.player(subjectId)} label=${iAmSubject ? 'Your answer' : `${subjectName}’s answer`}
+        <${FlipCard} player=${api.player(subjectId)} who=${iAmSubject ? null : subjectName} role="answer"
           value=${showValue(s.q, s.answers[subjectId])} tone=${tone(s)} />
-        <${FlipCard} player=${api.player(guesserId)} label=${iAmSubject ? `${guesserName}’s guess` : 'Your guess'}
+        <${FlipCard} player=${api.player(guesserId)} who=${iAmSubject ? guesserName : null} role="guess"
           value=${showValue(s.q, s.answers[guesserId])} tone=${tone(s)} delay=${260} />
         <span class=${`km-vs ${tone(s)}`} aria-hidden="true">${{ hit: '=', close: '≈', miss: '≠' }[tone(s)] || '?'}</span>
       </div>
@@ -187,17 +189,30 @@ function Picker({ q, sel, choose, lock, iAmSubject, subjectName }) {
       </button>
     </div>`;
   }
+  // The box unmounts once the answer is locked in, so it keeps the text until then: a submit the
+  // authority never got (or rejected) doesn't eat what was typed. The Picker's key empties it for
+  // a new question.
   return html`<div class="km-picker km-open">
     <${AnswerBox} placeholder=${iAmSubject ? 'Your honest answer…' : `${subjectName} would say…`} maxLength=${MAX_ANSWER}
-      onSubmit=${(v) => lock(v)} />
+      clearOnSubmit=${false} onSubmit=${(v) => lock(v)} />
   </div>`;
 }
 
-function FlipCard({ player, label, value, tone = '', delay = 0 }) {
+/**
+ * One side of the reveal. `who` is the partner's name (null = mine → "Your answer"). A long name
+ * is ellipsised on its own so "’s guess" always stays readable; the full label is the tooltip.
+ */
+function FlipCard({ player, who, role, value, tone = '', delay = 0 }) {
+  const label = who ? `${who}’s ${role}` : `Your ${role}`;
   return html`<div class=${`km-flip ${tone}`} style=${`--d:${delay}ms`}>
     <div class="km-flip-inner">
       <div class="km-face km-front">
-        <span class="km-face-label"><${Avatar} player=${player} size="sm" /><span>${label}</span></span>
+        <span class="km-face-label" title=${label}>
+          <${Avatar} player=${player} size="sm" />
+          ${who
+            ? html`<span class="km-face-who"><span class="km-face-name">${who}</span><span class="km-face-role">’s ${role}</span></span>`
+            : html`<span class="km-face-who"><span class="km-face-name">${label}</span></span>`}
+        </span>
         <b class="km-face-value">${value}</b>
       </div>
       <div class="km-face km-back" aria-hidden="true">💭</div>

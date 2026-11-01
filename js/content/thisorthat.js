@@ -1,5 +1,14 @@
 // This or That — original dilemmas, grouped by vibe. Keep each side short (it sits in a
-// half-width card on a phone). Order matters only for the stable indices stored in game state.
+// half-width card on a phone). Order matters only for the stable indices stored in game state:
+// edit an item in place rather than moving it.
+//
+// Every item must read the same on both screens and score honestly:
+// - Both of you see each side under "You'd pick…" AND under "<partner> would pick…", so no
+//   "I / me / my / you / your" — they'd point at a different person on each screen.
+// - A matching pick counts as "in tune", so no role or direction pairs (big spoon / little
+//   spoon, chase / be chased, who kisses first) where picking the same side means wanting
+//   opposite things. Phrase them as a shared preference instead (spooning / face-to-face).
+// - No hidden "whose?" (e.g. "live near family" — yours or mine?).
 
 const BANK = {
   sweet: [
@@ -33,30 +42,30 @@ const BANK = {
   ],
   flirty: [
     ['Forehead kiss', 'Neck kiss'],
-    ['Big spoon', 'Little spoon'],
+    ['Spooning all night', 'Face-to-face cuddles'],
     ['Dress up for date night', 'Stay in pyjamas together'],
     ['Flirty texts all day', 'One perfect text at night'],
-    ['Me in a fancy outfit', 'Me in your hoodie'],
+    ['Dressed up and fancy', 'Comfy in a borrowed hoodie'],
     ['Slow kisses', 'Surprise kisses'],
     ['Love note in a pocket', 'Love note on the mirror'],
     ['Couples massage', 'Bubble bath for two'],
     ['Wink across the room', 'Hand on the knee'],
-    ['Compliment my looks', 'Compliment my brain'],
+    ['Being called gorgeous', 'Being called brilliant'],
     ['Hair played with', 'Back scratched'],
-    ['Wake up to a kiss', 'Fall asleep in their arms'],
+    ['Wake up to a kiss', 'Fall asleep cuddling'],
     ['Kiss in the rain', 'Kiss under the stars'],
     ['Sexy voice', 'Sexy laugh'],
     ['Be serenaded', 'Be read poetry'],
     ['Spontaneous make-out', 'Slow-burn date night'],
-    ['Lost in my eyes', 'Melting at my smile'],
+    ['Weak for dreamy eyes', 'Weak for a cheeky smile'],
     ['Midnight skinny-dip', 'Hot tub under the stars'],
-    ['Run into their arms', 'Long hug, no words'],
-    ['Do the chasing', 'Be chased'],
+    ['Running hug at arrivals', 'Long hug, no words'],
+    ['Subtle flirting', 'Shameless flirting'],
     ['Flirt in public', 'Flirt in private'],
-    ['Tease all day', 'Spoil all day'],
+    ['A day of teasing', 'A day of spoiling'],
     ['Nap tangled up', 'Talk until 3 a.m.'],
     ['Salsa lesson together', 'Slow dance in socks'],
-    ['You kiss me first', 'I kiss you first'],
+    ['Kiss at the arrivals gate', 'Kiss behind closed doors'],
     ['Steal a kiss in a lift', 'Steal a kiss at a party'],
     ['Cheeky photo', 'Cheeky voice note'],
   ],
@@ -77,21 +86,21 @@ const BANK = {
     ['Moustache for a year', 'Unibrow for a year'],
     ['Free pizza for life', 'Free tacos for life'],
     ['Be a pirate', 'Be a wizard'],
-    ['Hiccup every hour', 'Sneeze when you laugh'],
+    ['Hiccup every hour', 'Sneeze at every laugh'],
     ['Ride a giant hamster', 'Ride a giant snail'],
     ['Couple name: Snugglebums', 'Couple name: Team Chaos'],
     ['Live in a cartoon', 'Live in a musical'],
     ['Emojis only for a day', 'GIFs only for a day'],
     ['Free haunted mansion', 'Tiny flat full of cats'],
     ['Fingers made of crayons', 'Hair made of spaghetti'],
-    ['Narrator in your head', 'Laugh track on your life'],
+    ['Life with a narrator', 'Life with a laugh track'],
     ['Duck-sized elephant', 'Elephant-sized duck'],
-    ['Lose every board game', 'Win but nobody believes you'],
+    ['Lose every board game', 'Win but nobody believes it'],
     ['Wear a cape daily', 'Wear a crown daily'],
   ],
   deep: [
     ['Know the future', 'Change the past'],
-    ['Live near family', 'Start fresh somewhere new'],
+    ['Close to both families', 'Start fresh somewhere new'],
     ['Big wedding', 'Elope on a mountain'],
     ['Travel the world', 'Build a cosy home base'],
     ['Be deeply understood', 'Be wildly adored'],
@@ -100,7 +109,7 @@ const BANK = {
     ['Remember every day', 'Forget the bad ones'],
     ['Grow old in a city', 'Grow old by the sea'],
     ['Comfort in silence', 'Comfort in words'],
-    ['Career you love', 'Career that gives you time'],
+    ['A career to love', 'A career that leaves time'],
     ['Plan the future', 'Live in the moment'],
     ['Spend on experiences', 'Save for security'],
     ['Read each other\'s minds', 'Feel each other\'s feelings'],

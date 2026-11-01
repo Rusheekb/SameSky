@@ -3,7 +3,7 @@
 // secretly and reveal side by side. Save the ones you love. +1 together point per card shared.
 
 import { CARDS, CLOSINGS } from '../../content/deeptalk.js';
-import { cleanText, pick } from '../../lib/util.js';
+import { cleanText, matchKey, pick } from '../../lib/util.js';
 
 export const MAX_CARDS = 15; // after this many shared cards the only way forward is Finish
 export const MAX_FAVS = 20;
@@ -48,15 +48,21 @@ export function validCards(content) {
   return out;
 }
 
+const keyOf = (text) => matchKey(text) || text.toLowerCase();
+const BANK = Object.fromEntries(LEVEL_IDS.map((l) => [l, (CARDS[l] || []).map((text, i) => ({ id: `${l}-${i}`, text, level: l, key: keyOf(text) }))]));
+
 function candidates(s, level, used) {
   const usedSet = new Set(used);
   // Personalised AI cards first, then the built-in deck.
   const ai = s.aiCards.map((c, i) => ({ id: `a${i}`, text: c.text, level: c.level })).filter((c) => c.level === level && !usedSet.has(c.id));
   if (ai.length) return ai;
-  const bank = (CARDS[level] || []).map((text, i) => ({ id: `${level}-${i}`, text, level }));
+  // The AI may write a card the deck also has: that one has been (or will be) asked already.
+  const aiKeys = new Set(s.aiCards.map((c) => keyOf(c.text)));
+  const bank = (BANK[level] || []).filter((c) => !aiKeys.has(c.key)).map(({ id, text }) => ({ id, text, level }));
   const fresh = bank.filter((c) => !usedSet.has(c.id));
   if (fresh.length) return fresh;
-  return bank.filter((c) => c.id !== s.card?.id); // whole level seen: allow repeats
+  const again = bank.filter((c) => c.id !== s.card?.id); // whole level seen: allow repeats
+  return again.length ? again : (BANK[level] || []).map(({ id, text }) => ({ id, text, level }));
 }
 
 /** Deal a new face-down card. `redraw` swaps the current unseen card (level change) without using a turn. */
@@ -125,14 +131,33 @@ function complete(s, outcome) {
 
 const short = (t) => (t.length > 110 ? `${t.slice(0, 107).trimEnd()}…` : t);
 
-function finish(s, ctx) {
+/** What tonight's conversation leaves in the night recap: one line + the cards worth keeping. */
+function recap(s) {
   const n = s.count;
   const saved = s.favs.length;
   const summary = n
     ? `Shared ${n} heart-to-heart card${n === 1 ? '' : 's'} and ${DEPTH[s.deepest] || 'opened up'}${saved ? ` · ${saved} saved ⭐` : ''}`
-    : 'Peeked at the Heart to Heart deck';
+    : saved
+      ? `Saved ${saved} heart-to-heart card${saved === 1 ? '' : 's'} ⭐`
+      : 'Peeked at the Heart to Heart deck';
   const highlights = (saved ? s.favs.map((f) => f.text) : s.recent).slice(-6).map(short);
-  return { ...s, phase: 'done', done: true, summary, highlights, closing: pick(CLOSINGS, ctx.random) };
+  return { summary, highlights };
+}
+
+function finish(s, ctx) {
+  return { ...s, phase: 'done', done: true, ...recap(s), closing: pick(CLOSINGS, ctx.random) };
+}
+
+/**
+ * Recap for leaving through ✕ (the room calls it when the game is closed). The deck has no
+ * natural end, so this is the usual way out: the shared count and saved favourites (or the
+ * last cards talked about) go to the night recap just as "Finish for tonight" would record them.
+ * Pure — never touches `s`. Sealed answers of an unrevealed card are never included.
+ */
+export function summarize(s) {
+  if (!s || !Array.isArray(s.favs) || !Array.isArray(s.recent) || !Number.isInteger(s.count)) return {};
+  if (s.done) return { summary: s.summary || '', highlights: Array.isArray(s.highlights) ? s.highlights : [] };
+  return recap(s);
 }
 
 export function reduce(s, a, ctx) {

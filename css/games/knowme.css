@@ -205,6 +205,9 @@
 }
 .game.knowme .km-flip-inner {
   display: grid;
+  /* A shrinkable track: without it the column grows to the label's max-content width, so long
+     names push the card past its half of the row (and off a phone screen). */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
   transform-style: preserve-3d;
   animation: km-flip 0.75s cubic-bezier(0.25, 0.9, 0.3, 1.15) both;
@@ -212,6 +215,7 @@
 }
 .game.knowme .km-face {
   grid-area: 1 / 1;
+  min-width: 0;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   border-radius: var(--radius);
@@ -248,12 +252,27 @@
   color: var(--muted);
   text-align: left;
   max-width: 100%;
-}
-.game.knowme .km-face-label > span {
   min-width: 0;
+}
+.game.knowme .km-face-label .avatar {
+  flex: none;
+}
+/* "<Name>’s guess": only the name gives way (ellipsis), "’s guess" always stays readable. */
+.game.knowme .km-face-who {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+.game.knowme .km-face-who,
+.game.knowme .km-face-name {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.game.knowme .km-face-name {
+  min-width: 2ch;
+}
+.game.knowme .km-face-role {
+  flex: none;
 }
 .game.knowme .km-face-label .avatar-sm {
   width: 24px;
@@ -261,6 +280,7 @@
   font-size: 14px;
 }
 .game.knowme .km-face-value {
+  max-width: 100%;
   margin: auto 0;
   font-size: 1.2rem;
   line-height: 1.2;

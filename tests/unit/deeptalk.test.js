@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import * as dt from '../../js/games/deeptalk/logic.js';
 import { CARDS, CLOSINGS } from '../../js/content/deeptalk.js';
 import { gameHarness } from '../helpers/sim.js';
-import { seededRandom } from '../../js/lib/util.js';
+import { seededRandom, matchKey } from '../../js/lib/util.js';
+import * as room from '../../js/core/state.js';
+import { GAMES } from '../../js/games/index.js';
 
 const ctxWith = (vibe, seed = 5) => ({ players: ['p1', 'p2'], names: { p1: 'Alex', p2: 'Blair' }, by: 'p1', now: 0, random: seededRandom(seed), settings: { vibe } });
 
@@ -309,4 +311,128 @@ test('AI cards are validated, preferred per level, and fall back to the deck', (
   }
   const many = { cards: Array.from({ length: 50 }, (_, i) => ({ text: `Question number ${i}?`, level: (i % 3) + 1 })) };
   assert.ok(gameHarness(dt, { opts: { content: many } }).s.aiCards.length <= 20);
+});
+
+test('content: every card works for either partner and any couple', () => {
+  // Both of you answer the same card in turn, so nothing may assume who is who.
+  for (const l of [1, 2, 3]) {
+    for (const c of CARDS[l]) {
+      assert.ok(!/\b(he|she|him|her|his|hers|boyfriend|girlfriend|husband|wife)\b/i.test(c), `gendered: ${c}`);
+      assert.ok(!/\b(asked (me|you) out|proposed)\b/i.test(c), `one-sided history: ${c}`);
+    }
+  }
+});
+
+test('AI cards that are also in the deck are never dealt twice', () => {
+  const dupe = CARDS[1][0];
+  const content = {
+    cards: [
+      { text: dupe.toUpperCase().replace(/[—?]/g, ''), level: 1 }, // same card, other spelling
+      { text: 'What song should play at our reunion?', level: 1 },
+    ],
+  };
+  for (let seed = 1; seed <= 20; seed++) {
+    const h = gameHarness(dt, { seed, opts: { content } });
+    const keys = [];
+    for (let i = 0; i < CARDS[1].length + 1; i++) {
+      keys.push(matchKey(h.s.card.text));
+      h.act('p1', { type: 'next', card: h.s.card.id });
+    }
+    assert.equal(keys.filter((k) => k === matchKey(dupe)).length, 1, `seed ${seed}: the duplicate came back`);
+    assert.equal(new Set(keys).size, keys.length, `seed ${seed}: every card once`);
+  }
+});
+
+// ------------------------------------------------------------------ leaving through ✕ (rules#2)
+
+function deepFreeze(o) {
+  if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+    Object.freeze(o);
+    for (const v of Object.values(o)) deepFreeze(v);
+  }
+  return o;
+}
+
+const short = (t) => (t.length > 110 ? `${t.slice(0, 107).trimEnd()}…` : t);
+
+test('summarize: shared count and saved favourites so far; pure; finished games keep their own', () => {
+  const h = gameHarness(dt);
+  assert.deepEqual(dt.summarize(h.s, h.ctx()), { summary: 'Peeked at the Heart to Heart deck', highlights: [] });
+  const texts = [];
+  for (let i = 0; i < 4; i++) {
+    const id = h.s.card.id;
+    texts.push(h.s.card.text);
+    h.act('p1', { type: 'flip', card: id });
+    if (i % 2) {
+      h.act('p1', { type: 'write', card: id });
+      h.act('p1', { type: 'answer', card: id, text: `Alex answer ${i}` });
+      h.act('p2', { type: 'answer', card: id, text: `Blair answer ${i}` });
+    } else h.act('p2', { type: 'talked', card: id });
+    if (i < 3) h.act('p1', { type: 'save', card: id, on: true });
+    h.act('p2', { type: 'next', card: id });
+  }
+  // A fifth card half-written: its sealed answer must never reach the recap.
+  const c5 = h.s.card.id;
+  h.act('p1', { type: 'flip', card: c5 });
+  h.act('p1', { type: 'write', card: c5 });
+  h.act('p1', { type: 'answer', card: c5, text: 'SECRET sealed answer' });
+  const before = JSON.stringify(h.s);
+  const sum = dt.summarize(deepFreeze(h.s), h.ctx());
+  assert.equal(JSON.stringify(h.s), before, 'never mutates');
+  assert.equal(h.s.done, false);
+  assert.equal(sum.summary, 'Shared 4 heart-to-heart cards and kept it light · 3 saved ⭐');
+  assert.deepEqual(sum.highlights, texts.slice(0, 3).map(short));
+  assert.ok(!JSON.stringify(sum).includes('SECRET'));
+  assert.deepEqual(dt.summarize(h.s, h.ctx()), sum, 'deterministic');
+
+  // Nothing saved: the last cards talked about.
+  const g = gameHarness(dt);
+  const said = [];
+  for (let i = 0; i < 5; i++) {
+    said.push(g.s.card.text);
+    g.act('p1', { type: 'next', card: talkCard(g) });
+  }
+  assert.deepEqual(dt.summarize(g.s, g.ctx()), { summary: 'Shared 5 heart-to-heart cards and kept it light', highlights: said.slice(-3).map(short) });
+
+  // Saved but never shared (flipped, starred, skipped).
+  const k = gameHarness(dt);
+  const id = k.s.card.id;
+  k.act('p1', { type: 'flip', card: id });
+  k.act('p1', { type: 'save', card: id, on: true });
+  assert.deepEqual(dt.summarize(k.s, k.ctx()), { summary: 'Saved 1 heart-to-heart card ⭐', highlights: [short(k.s.card.text)] });
+
+  // Finished with "Finish for tonight": exactly what the end screen recorded.
+  g.act('p2', { type: 'finish' });
+  assert.deepEqual(dt.summarize(g.s, g.ctx()), { summary: g.s.summary, highlights: g.s.highlights });
+  for (const bad of [null, undefined, {}, { favs: 'x' }]) assert.deepEqual(dt.summarize(bad, g.ctx()), {});
+});
+
+test('leaving through ✕ keeps the conversation in the night recap', () => {
+  const ctx = { now: 1_700_000_000_000, random: seededRandom(4), games: GAMES, online: new Set(['p1', 'p2']) };
+  let st = room.initialState('R');
+  st = room.reduce(st, { type: 'join', by: 'p1', player: { id: 'p1', name: 'Alex' } }, ctx);
+  st = room.reduce(st, { type: 'join', by: 'p2', player: { id: 'p2', name: 'Blair' } }, { ...ctx, now: ctx.now + 1 });
+  st = room.reduce(st, { type: 'startGame', by: 'p1', id: 'deeptalk' }, ctx);
+  const g = (by, a) => (st = room.reduce(st, { type: 'game', by, a }, ctx));
+  const saved = [];
+  for (let i = 0; i < 4; i++) {
+    const card = st.game.s.card.id;
+    g('p1', { type: 'flip', card });
+    if (i % 2) {
+      g('p1', { type: 'write', card });
+      g('p1', { type: 'answer', card, text: `Alex answer ${i}` });
+      g('p2', { type: 'answer', card, text: `Blair answer ${i}` });
+    } else g('p2', { type: 'talked', card });
+    if (i < 3) {
+      g('p1', { type: 'save', card, on: true });
+      saved.push(st.game.s.card.text);
+    }
+    g('p2', { type: 'next', card });
+  }
+  st = room.reduce(st, { type: 'endGame', by: 'p1' }, ctx);
+  const entry = st.history.at(-1);
+  assert.equal(entry.id, 'deeptalk');
+  assert.equal(entry.summary, 'Shared 4 heart-to-heart cards and kept it light · 3 saved ⭐');
+  assert.deepEqual(entry.highlights, saved.map(short));
+  assert.equal(entry.points, 4);
 });

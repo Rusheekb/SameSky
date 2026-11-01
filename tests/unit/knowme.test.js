@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import * as km from '../../js/games/knowme/logic.js';
 import { QUESTIONS } from '../../js/content/knowme.js';
 import { gameHarness } from '../helpers/sim.js';
-import { seededRandom } from '../../js/lib/util.js';
+import { seededRandom, matchKey } from '../../js/lib/util.js';
+import * as room from '../../js/core/state.js';
+import { GAMES } from '../../js/games/index.js';
 
 const { ROUNDS, MAX_SKIPS, MAX_ANSWER } = km;
 const VIBES = ['sweet', 'flirty', 'silly', 'deep'];
@@ -229,11 +231,15 @@ test('open: the subject judges (only the subject, only 0/1/2); word-for-word sco
   e.act('p2', { type: 'answer', value: 'beach' });
   assert.equal(e.s.phase, 'reveal');
   assert.deepEqual(e.s.result, { score: 2, how: 'exact' });
-  // Emoji-only answers are fine (they just go to the judge).
+  // Emoji-only answers are words too: identical emoji match by themselves, different ones go to the judge.
   const j = harnessWithKind('open');
   j.act('p1', { type: 'answer', value: '🍕' });
   j.act('p2', { type: 'answer', value: '🍕' });
-  assert.equal(j.s.phase, 'judge');
+  assert.equal(j.s.phase, 'reveal');
+  const k = harnessWithKind('open');
+  k.act('p1', { type: 'answer', value: '🍕' });
+  k.act('p2', { type: 'answer', value: '🌮' });
+  assert.equal(k.s.phase, 'judge');
 });
 
 test('next: only from reveal, either player, ignores stale double taps', () => {
@@ -486,4 +492,162 @@ test('many replays keep the vibe ratio and kind mix, and never repeat last game�
       s = km.reduce(s, { type: 'again', by: 'p1' }, ctx);
     }
   }
+});
+
+// ------------------------------------------------------------------ AI + bank overlap (rules#4)
+
+test('AI questions that are also in the bank are never asked twice (rounds or skip spares)', () => {
+  const key = (t) => matchKey(t);
+  // Bank texts must be unique by the same key, or the bank alone could repeat itself.
+  assert.equal(new Set(QUESTIONS.map((q) => key(q.text))).size, QUESTIONS.length, 'bank texts unique by normalised key');
+  const bankTexts = QUESTIONS.map((q) => q.text);
+  // The AI prompt's own "good" examples are bank questions; spellings vary.
+  const dupes = [
+    { text: 'Go-to comfort food', kind: 'choice', options: ['Ramen', 'Pizza', 'Mac and cheese', 'Soup'] },
+    { text: 'most used emoji', kind: 'open' },
+    { text: 'About you: Favourite season?', kind: 'choice', options: ['Spring', 'Summer', 'Autumn', 'Winter'] },
+  ];
+  for (const n of [3, 8]) {
+    // n = 8: every round is an AI question that the bank also has, so all 3 spares must avoid them.
+    const extra = bankTexts.filter((t) => !dupes.some((d) => key(d.text) === key(t))).slice(0, n - dupes.length);
+    const questions = [...dupes, ...extra.map((text) => ({ text: text.toUpperCase() + '!', kind: 'open' }))].slice(0, n);
+    for (let seed = 1; seed <= 300; seed++) {
+      const s = km.init(ctxFor(VIBES[seed % 4], seed), { content: { questions } });
+      const rounds = [s.q, ...s.queue];
+      assert.equal(rounds.filter((q) => q.ai).length, n);
+      const keys = [...rounds, ...s.spares].map((q) => key(q.text));
+      assert.equal(new Set(keys).size, keys.length, `seed ${seed} (${n} AI): ${[...rounds, ...s.spares].map((q) => `${q.id}:${q.text}`).join(' | ')}`);
+      assert.equal(rounds.length, ROUNDS);
+      assert.equal(s.spares.length, MAX_SKIPS);
+    }
+  }
+  // Skipping through every spare still never brings an AI question back.
+  const h = gameHarness(km, { seed: 24, opts: { content: { questions: dupes } } });
+  const asked = [h.s.q.text];
+  for (let i = 0; i < MAX_SKIPS; i++) {
+    h.act(i % 2 ? 'p1' : 'p2', { type: 'skip', q: h.s.q.id });
+    asked.push(h.s.q.text);
+  }
+  const all = [...asked, ...h.s.queue.map((q) => q.text)].map(key);
+  assert.equal(new Set(all).size, all.length);
+});
+
+test('AI dedupe uses the same normalised key as the bank: spacing, case, accents and plurals', () => {
+  const v = km.validQuestions({
+    questions: [
+      { text: 'Comfort food', kind: 'open' },
+      { text: 'comfort-foods!', kind: 'open' },
+      { text: 'Comfortfood', kind: 'open' },
+      { text: 'Café order', kind: 'open' },
+      { text: 'cafe ORDER', kind: 'open' },
+      { text: 'Ice cream flavour', kind: 'choice', options: ['Ice cream', 'icecream', 'Sorbet', 'Gelato', 'Frozen yoghurt'] },
+    ],
+  });
+  assert.deepEqual(v.map((q) => q.text), ['Comfort food', 'Café order', 'Ice cream flavour']);
+  assert.deepEqual(v[2].options, ['Ice cream', 'Sorbet', 'Gelato', 'Frozen yoghurt']);
+});
+
+// ------------------------------------------------------------------ leaving mid-game (rules#2)
+
+const deepFreeze = (o) => {
+  if (o && typeof o === 'object' && !Object.isFrozen(o)) {
+    Object.freeze(o);
+    for (const v of Object.values(o)) deepFreeze(v);
+  }
+  return o;
+};
+
+/** Plays `n` rounds; `scores[i]` picks the outcome of round i (2 = spot on, 0 = miss). */
+function playRounds(h, scores) {
+  scores.forEach((sc, i) => {
+    playRound(h, sc === 2 ? 'a' : 'b', sc);
+    assert.equal(h.s.log.at(-1).score, sc, `round ${i + 1}`);
+    if (i < scores.length - 1) h.act('p1', { type: 'next', round: h.s.round });
+  });
+}
+
+/** Harness whose questions are all choice (so every round's score is exactly what we plan). */
+const choiceGame = (seed = 3) =>
+  gameHarness(km, {
+    seed,
+    opts: { content: { questions: Array.from({ length: 8 }, (_, i) => ({ text: `Pick number ${i + 1}`, kind: 'choice', options: ['A', 'B', 'C', 'D'] })) } },
+  });
+
+test('summarize: nothing played yet -> nothing to say (the room records "Ended early")', () => {
+  const h = gameHarness(km);
+  assert.deepEqual(km.summarize(h.s, h.ctx('p1')), { summary: '', highlights: [] });
+  // A round still being answered doesn't count, and its hidden answers never leak.
+  h.act('p1', { type: 'answer', value: val(h.s.q, 'a'), q: h.s.q.id });
+  assert.deepEqual(km.summarize(h.s, h.ctx('p1')), { summary: '', highlights: [] });
+  // Junk in, nothing out (the room falls back to its own line).
+  for (const s of [null, undefined, {}, { log: 'x' }]) assert.deepEqual(km.summarize(s, h.ctx('p1')), {});
+  assert.deepEqual(km.summarize(h.s, { ...h.ctx('p1'), players: ['p1'] }), {});
+});
+
+test('summarize: a running summary + highlights from the rounds revealed so far (pure)', () => {
+  const h = choiceGame();
+  playRounds(h, [2]); // round 1: Blair guesses Alex
+  assert.equal(km.summarize(h.s, h.ctx('p1')).summary, 'Blair knew Alex 1/1 so far (+2 pts)', 'Alex has not guessed yet');
+  h.act('p1', { type: 'next', round: 1 });
+  playRounds(h, [0, 2]); // round 2: Alex misses Blair; round 3: Blair gets Alex
+  const s = deepFreeze(h.s);
+  const before = JSON.stringify(s);
+  const out = km.summarize(s, h.ctx('p2'));
+  assert.equal(JSON.stringify(s), before, 'no mutation');
+  assert.equal(out.summary, 'Alex knew Blair 0/1, Blair knew Alex 2/2 so far (+4 pts)');
+  assert.ok(out.highlights.length >= 2 && out.highlights.length <= 6);
+  assert.ok(out.highlights.every((l) => typeof l === 'string' && l.length > 0 && l.length <= 200));
+  assert.ok(out.highlights.some((l) => /^Blair guessed Alex's pick number \d: [A-D] ✓$/.test(l)), out.highlights.join('\n'));
+  assert.ok(out.highlights.some((l) => /^Alex guessed Blair's .+ — it’s /.test(l)), 'the miss');
+  assert.equal(out.highlights.at(-1), 'Alex knows Blair 0/1 · Blair knows Alex 2/2 so far');
+  assert.deepEqual(km.summarize(s, h.ctx('p1')), out, 'deterministic');
+
+  // While the subject is judging an open answer, that round isn't settled -> not counted.
+  const j = harnessWithKind('open');
+  j.act('p1', { type: 'answer', value: 'Lisbon' });
+  j.act('p2', { type: 'answer', value: 'Tokyo' });
+  assert.equal(j.s.phase, 'judge');
+  assert.deepEqual(km.summarize(j.s, j.ctx('p1')), { summary: '', highlights: [] });
+});
+
+test('summarize: a finished play keeps its own summary; play again + a few rounds adds up both', () => {
+  const h = choiceGame(7);
+  playRounds(h, [2, 2, 0, 2, 2, 0, 0, 2]); // Blair guesses odd rounds (2,0,2,0), Alex even ones (2,2,0,2)
+  h.act('p1', { type: 'next', round: ROUNDS });
+  assert.equal(h.s.done, true);
+  const finished = km.summarize(h.s, h.ctx('p1'));
+  assert.deepEqual(finished, { summary: h.s.summary, highlights: h.s.highlights });
+  assert.equal(finished.summary, 'Alex knew Blair 3/4, Blair knew Alex 2/4 (+10 pts)');
+  h.act('p2', { type: 'again' });
+  assert.deepEqual(km.summarize(h.s, h.ctx('p1')), finished, 'nothing new yet: the last finished play');
+  playRounds(h, [2, 0]); // bank questions now: play the planned outcomes anyway
+  const out = km.summarize(h.s, h.ctx('p1'));
+  const t = km.tallyOf(h.s.log, ['p1', 'p2']);
+  assert.equal(t.p2.right, 1, 'round 1: Blair spot on');
+  assert.equal(t.p1.right, 0, 'round 2: Alex missed');
+  assert.equal(out.summary, 'Over 1 game and 2 rounds: Alex knew Blair 3/5, Blair knew Alex 3/5');
+  assert.ok(out.highlights.length <= 6);
+  assert.match(out.highlights.at(-1), /^Alex knows Blair \d\/1 · Blair knows Alex \d\/1 so far$/);
+});
+
+test('leaving through ✕ mid-game records the running summary and highlights in the night history', () => {
+  const ctx = { now: 1_700_000_000_000, random: seededRandom(4), games: GAMES, online: new Set(['p1', 'p2']) };
+  let st = room.initialState('R');
+  st = room.reduce(st, { type: 'join', by: 'p1', player: { id: 'p1', name: 'Alex' } }, ctx);
+  st = room.reduce(st, { type: 'join', by: 'p2', player: { id: 'p2', name: 'Blair' } }, { ...ctx, now: ctx.now + 1 });
+  st = room.reduce(st, { type: 'startGame', by: 'p1', id: 'knowme' }, ctx);
+  for (let r = 0; r < 6; r++) {
+    const q = st.game.s.q;
+    const v = q.kind === 'choice' ? 0 : q.kind === 'scale' ? 5 : 'same';
+    st = room.reduce(st, { type: 'game', by: 'p1', a: { type: 'answer', value: v, q: q.id } }, ctx);
+    st = room.reduce(st, { type: 'game', by: 'p2', a: { type: 'answer', value: v, q: q.id } }, ctx);
+    st = room.reduce(st, { type: 'game', by: 'p1', a: { type: 'next', round: st.game.s.round } }, ctx);
+  }
+  st = room.reduce(st, { type: 'endGame', by: 'p1' }, ctx);
+  const entry = st.history.at(-1);
+  assert.equal(entry.id, 'knowme');
+  assert.equal(entry.points, 12);
+  assert.equal(entry.summary, 'Alex knew Blair 3/3, Blair knew Alex 3/3 so far (+12 pts)');
+  assert.ok(entry.highlights.length >= 2 && entry.highlights.length <= 6, entry.highlights.join('\n'));
+  assert.equal(entry.highlights.at(-1), 'Alex knows Blair 3/3 · Blair knows Alex 3/3 so far');
 });

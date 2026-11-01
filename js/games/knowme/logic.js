@@ -7,7 +7,7 @@
 // Question kinds: choice (4 options, value = index), scale (value = 1..10), open (value = text).
 
 import { QUESTIONS } from '../../content/knowme.js';
-import { cleanText, normalizeWord, wordsMatch, shuffle } from '../../lib/util.js';
+import { cleanText, matchKey, wordsMatch, shuffle } from '../../lib/util.js';
 
 export const ROUNDS = 8;
 export const MAX_SKIPS = 3;
@@ -39,10 +39,13 @@ function slim(q, id, ai = false) {
   return out;
 }
 
+/** Comparison key for question / option texts: "Go-to comfort food" = "go to comfort-foods". */
+const keyOf = (t) => matchKey(t) || String(t).toLowerCase().trim();
+
 const BANK = QUESTIONS.map((q, i) => ({ ...slim(q, `b${i}`), vibes: q.vibes || [] }));
+const BANK_KEY = new Map(BANK.map((q) => [q.id, keyOf(q.text)]));
 
 const str = (v, max) => (typeof v === 'string' || typeof v === 'number' ? cleanText(v, max) : '');
-const keyOf = (t) => normalizeWord(t) || t.toLowerCase();
 
 /**
  * Validate AI-provided questions (`{ questions: [{ text, kind, options, low, high }] }`).
@@ -134,7 +137,10 @@ function deal(ctx, ai, seen) {
     ...shuffle(list.filter((q) => asked.has(q.id) && !recent.has(q.id)), rand),
     ...shuffle(list.filter((q) => recent.has(q.id)), rand),
   ];
-  const taken = new Set();
+  // The AI is free to write a question the bank also has (its prompt even lists "Go-to comfort
+  // food" as a good example), so bank questions with the same text never join the rounds or spares.
+  const aiKeys = new Set(ai.map((q) => keyOf(q.text)));
+  const taken = new Set(BANK.filter((q) => aiKeys.has(BANK_KEY.get(q.id))).map((q) => q.id));
   const fromBank = pickBank(ROUNDS - ai.length, { vibe, order, taken, preset: ai });
   for (const q of fromBank) taken.add(q.id);
   const spares = pickBank(MAX_SKIPS, { vibe, order, taken, capped: false });
@@ -206,6 +212,62 @@ function highlightLine(r, ctx) {
   return cleanText(line, 200);
 }
 
+/** `a` + `b` per player (tallies summed across plays). */
+function addTallies(a, b, players) {
+  const zero = { right: 0, close: 0, total: 0 };
+  return Object.fromEntries(
+    players.map((id) => {
+      const x = a?.[id] || zero;
+      const y = b?.[id] || zero;
+      return [id, { right: x.right + y.right, close: x.close + y.close, total: x.total + y.total }];
+    }),
+  );
+}
+
+/** Guesser/subject pairs with at least one guess in `t` (mid-game, one of you may not have guessed yet). */
+const pairsOf = (t, ctx) => {
+  const [p1, p2] = ctx.players;
+  return [[p1, p2], [p2, p1]].filter(([g]) => t[g]?.total > 0);
+};
+
+/** "Alex knew Blair 2/4, Blair knew Alex 1/4". */
+const knewLine = (t, ctx) =>
+  pairsOf(t, ctx)
+    .map(([g, sub]) => `${nameOf(ctx, g)} knew ${nameOf(ctx, sub)} ${t[g].right}/${t[g].total}`)
+    .join(', ');
+
+/** "Alex knows Blair 2/4 · Blair knows Alex 1/4" (the last highlight line). */
+const knowsLine = (t, ctx) =>
+  pairsOf(t, ctx)
+    .map(([g, sub]) => `${nameOf(ctx, g)} knows ${nameOf(ctx, sub)} ${t[g].right}/${t[g].total}`)
+    .join(' · ');
+
+/** A few memorable rounds for the recap poem: up to 3 spot-on guesses and a funny miss. */
+function memorable(log, ctx) {
+  const hits = log.filter((r) => r.score === 2).slice(0, 3);
+  const other = log.filter((r) => r.score < 2).slice(0, 4 - hits.length);
+  return log.filter((r) => hits.includes(r) || other.includes(r)).map((r) => highlightLine(r, ctx));
+}
+
+/**
+ * Recap for leaving through ✕ mid-game (called by the room when the game is closed): the same
+ * kind of summary and highlights a finished play gets, built from the rounds revealed so far.
+ * Pure — never touches `s`. A round still being answered or judged doesn't count.
+ */
+export function summarize(s, ctx) {
+  if (!s || !Array.isArray(s.log) || !Array.isArray(ctx?.players) || ctx.players.length < 2) return {};
+  const carry = { summary: s.summary || '', highlights: Array.isArray(s.highlights) ? s.highlights : [] };
+  if (s.done || !s.log.length) return carry; // finished, or nothing new since the last finished play
+  const tally = tallyOf(s.log, ctx.players);
+  const plays = Number.isInteger(s.plays) ? s.plays : 0;
+  const n = s.log.length;
+  const summary = plays
+    ? `Over ${plays} game${plays > 1 ? 's' : ''} and ${n} round${n > 1 ? 's' : ''}: ${knewLine(addTallies(s.totals, tally, ctx.players), ctx)}`
+    : `${knewLine(tally, ctx)} so far (+${s.gained} pts)`;
+  const highlights = [...carry.highlights, ...memorable(s.log, ctx), `${knowsLine(tally, ctx)} so far`].slice(-6);
+  return { summary, highlights };
+}
+
 // ---------------------------------------------------------------- state
 
 const EMPTY_CARRY = { seen: [], plays: 0, points: 0, totals: {}, summary: '', highlights: [] };
@@ -265,28 +327,11 @@ function settle(s, score, ctx, how) {
 }
 
 function finish(s, ctx) {
-  const [p1, p2] = ctx.players;
   const tally = tallyOf(s.log, ctx.players);
-  const totals = {};
-  for (const id of ctx.players) {
-    const a = s.totals[id] || { right: 0, close: 0, total: 0 };
-    totals[id] = { right: a.right + tally[id].right, close: a.close + tally[id].close, total: a.total + tally[id].total };
-  }
+  const totals = addTallies(s.totals, tally, ctx.players);
   const plays = s.plays + 1;
-  const knows = (t, g, sub) => `${nameOf(ctx, g)} knew ${nameOf(ctx, sub)} ${t[g].right}/${t[g].total}`;
-  const summary =
-    plays === 1
-      ? `${knows(tally, p1, p2)}, ${knows(tally, p2, p1)} (+${s.gained} pts)`
-      : `Over ${plays} games: ${knows(totals, p1, p2)}, ${knows(totals, p2, p1)}`;
-
-  // A few memorable rounds for the recap poem: up to 3 spot-on guesses and a funny miss.
-  const hits = s.log.filter((r) => r.score === 2).slice(0, 3);
-  const other = s.log.filter((r) => r.score < 2).slice(0, 4 - hits.length);
-  const chosen = s.log.filter((r) => hits.includes(r) || other.includes(r));
-  const lines = [
-    ...chosen.map((r) => highlightLine(r, ctx)),
-    `${nameOf(ctx, p1)} knows ${nameOf(ctx, p2)} ${tally[p1].right}/${tally[p1].total} · ${nameOf(ctx, p2)} knows ${nameOf(ctx, p1)} ${tally[p2].right}/${tally[p2].total}`,
-  ];
+  const summary = plays === 1 ? `${knewLine(tally, ctx)} (+${s.gained} pts)` : `Over ${plays} games: ${knewLine(totals, ctx)}`;
+  const lines = [...memorable(s.log, ctx), knowsLine(tally, ctx)];
   return {
     ...s,
     phase: 'over',
