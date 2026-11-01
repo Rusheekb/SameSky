@@ -204,7 +204,7 @@ export function passcodeProblem(passcode: string): string | null {
 function normalizeOrigin(o: string): string {
   const t = o.trim().toLowerCase().replace(/\/+$/, '');
   try {
-    return new URL(t).origin; // "https://you.github.io/Game/" -> "https://you.github.io"
+    return new URL(t).origin; // "https://you.github.io/SameSky/" -> "https://you.github.io"
   } catch {
     return t;
   }

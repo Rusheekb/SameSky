@@ -194,7 +194,7 @@ test('OPTIONS preflight: 204 with CORS headers covering everything the browser c
 test('ALLOWED_ORIGINS: listed origins are echoed (paths/trailing slashes ignored), others get a READABLE 403', async () => {
   const limits = limitsWith({ perIp: 3, failedPasscodes: 2 });
   const r = rig({
-    env: { ALLOWED_ORIGINS: 'https://rusheekb.github.io/Game/, http://localhost:5173' },
+    env: { ALLOWED_ORIGINS: 'https://rusheekb.github.io/SameSky/, http://localhost:5173' },
     answer: reply(TWIST),
     limits,
   });

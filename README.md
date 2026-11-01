@@ -3,7 +3,7 @@
 **Game night for two hearts, miles apart.** Real-time mini-games made for long-distance
 couples: open the site on both phones (or laptops), hop on a call, and play together live.
 
-▶️ **Play:** `https://rusheekb.github.io/Game/` once GitHub Pages is switched on (see
+▶️ **Play:** <https://rusheekb.github.io/SameSky/> once GitHub Pages is switched on (see
 [SETUP.md](SETUP.md), it takes two minutes).
 
 ## The games

@@ -15,22 +15,23 @@ There are three levels. Level 1 is enough to start playing tonight.
 1. Open the repo on GitHub → **Settings → Pages**.
 2. Under **Build and deployment → Source**, choose **GitHub Actions**.
 3. Go to the **Actions** tab → **Deploy to GitHub Pages** → **Run workflow** (or just push a commit).
-4. When it turns green, the URL appears in the run summary and under Settings → Pages,
-   e.g. `https://rusheekb.github.io/Game/`.
+4. When it turns green, the URL appears in the run summary and under Settings → Pages:
+   **`https://rusheekb.github.io/SameSky/`** (the path is case-sensitive — keep the capital
+   S's when you share it).
 
 That's it — open the link, create a room, send your partner the invite link.
 
 > The deploy workflow runs on pushes to `main` (and to the branch this was built on). If you
 > later rename the default branch to `main`, nothing else needs to change.
 
-**Optional: give the repo a nicer name.** Settings → General → Repository name → e.g.
-`same-sky`; then on the repo home page click the ⚙️ next to *About* and paste the description:
+**Repo description:** on the repo home page click the ⚙️ next to *About*, paste the line below,
+and put `https://rusheekb.github.io/SameSky/` in *Website*:
 
-> 🌙 Same Sky — real-time mini-games for long-distance couples. Sync your minds, guess each
-> other's answers, doodle and write stories together, live.
+> 🌙 Same Sky: real-time mini-games for long-distance couples. Sync your minds, guess each
+> other's answers, doodle and write stories together, live on both phones.
 
-Renaming changes the URL to `https://rusheekb.github.io/same-sky/` (the app uses relative paths,
-so it keeps working; old links stop working).
+The app only uses relative paths, so it works under any repo name. If you ever rename the repo
+again, the URL changes with it and old links stop working.
 
 ---
 
