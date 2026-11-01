@@ -3,7 +3,7 @@
 import { html, useEffect, useMemo, useRef, useState, Component } from './h.js';
 import { Session } from '../core/session.js';
 import { playerIds, VIBES } from '../core/state.js';
-import { chooseTransportKind, createTransport } from '../net/transport.js';
+import { chooseTransportKind, createTransport, hasSupabase } from '../net/transport.js';
 import { storage } from '../lib/storage.js';
 import { formatCode } from '../lib/util.js';
 import { aiConfigured, aiGenerate, getPasscode, setPasscode, AiError } from '../lib/ai.js';
@@ -37,19 +37,61 @@ function useSession(code, profile, config) {
       toast(`Could not connect: ${err.message}`);
     });
     const bye = () => s?.stop();
+    // Coming back from the back/forward cache: the session was stopped on pagehide, so reload.
+    const show = (e) => e.persisted && location.reload();
+    // Phones suspend background tabs; say hello as soon as we're visible again.
+    const wake = () => document.visibilityState === 'visible' && s?.poke();
     addEventListener('pagehide', bye);
+    addEventListener('pageshow', show);
+    document.addEventListener('visibilitychange', wake);
     return () => {
       cancelled = true;
       removeEventListener('pagehide', bye);
+      removeEventListener('pageshow', show);
+      document.removeEventListener('visibilitychange', wake);
       s?.stop();
     };
   }, [code]);
   return session;
 }
 
+/** True once the transport has failed to come online for `ms` (so we can offer another route). */
+function useSlowConnection(session, ms = 12000) {
+  const [slow, setSlow] = useState(false);
+  const online = session?.status === 'online';
+  useEffect(() => {
+    if (!session || online) {
+      setSlow(false);
+      return undefined;
+    }
+    const h = setTimeout(() => setSlow(true), ms);
+    return () => clearTimeout(h);
+  }, [session, online]);
+  return slow;
+}
+
+function switchTransport(kind) {
+  const u = new URL(location.href);
+  u.searchParams.set('net', kind);
+  location.href = u.toString();
+}
+
+function ConnectionHelp({ session, config }) {
+  const kind = session.transport.kind;
+  const alt = kind === 'supabase' ? 'peer' : kind === 'peer' && hasSupabase(config) ? 'supabase' : null;
+  return html`<div class="away-banner conn-help" role="status">
+    <p>Can't reach the ${session.transport.label} connection${session.statusDetail ? ` (${session.statusDetail})` : ''}.</p>
+    ${alt &&
+    html`<p><button class="btn btn-sm" onClick=${() => switchTransport(alt)}>
+        Try ${alt === 'peer' ? 'a direct connection' : 'Supabase'} instead</button><br />
+      <small>You both need to be on the same kind — send your partner the invite link again after switching.</small></p>`}
+  </div>`;
+}
+
 export function Room({ code, profile, config, onProfileChange }) {
   const session = useSession(code, profile, config);
   const [panel, setPanel] = useState(null); // 'settings' | 'recap' | null
+  const slow = useSlowConnection(session);
 
   // Push local profile edits into the room.
   useEffect(() => {
@@ -98,6 +140,7 @@ export function Room({ code, profile, config, onProfileChange }) {
   return html`<div class="room">
     <${TopBar} session=${session} code=${code} onSettings=${() => setPanel('settings')} />
     <main class="room-main">
+      ${slow && html`<${ConnectionHelp} session=${session} config=${config} />`}
       ${!partner
         ? html`<${Invite} code=${code} session=${session} />`
         : st.game

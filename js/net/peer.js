@@ -12,8 +12,9 @@ const SLOTS = ['a', 'b'];
 const STALE_MS = 10000; // no data on a connection for this long -> assume it died
 
 export class PeerTransport extends BaseTransport {
-  constructor({ room }) {
+  constructor({ room, Peer = null }) {
     super();
+    this.PeerCtor = Peer; // injectable for tests; otherwise the vendored PeerJS is loaded on connect()
     this.kind = 'peer';
     this.label = 'Direct (WebRTC)';
     this.room = room.toLowerCase();
@@ -28,7 +29,10 @@ export class PeerTransport extends BaseTransport {
 
   async connect() {
     this._setStatus('connecting', 'Finding your partner…');
-    await loadScript(new URL('../vendor/peerjs.min.js', import.meta.url).href);
+    if (!this.PeerCtor) {
+      await loadScript(new URL('../vendor/peerjs.min.js', import.meta.url).href);
+      this.PeerCtor = globalThis.peerjs?.Peer || globalThis.Peer;
+    }
     this._claim(0);
     this._every(3000, () => this._watchdog());
   }
@@ -53,8 +57,7 @@ export class PeerTransport extends BaseTransport {
   _claim(idx) {
     if (this.closed) return;
     const slot = SLOTS[idx % SLOTS.length];
-    const Peer = globalThis.peerjs?.Peer || globalThis.Peer;
-    const peer = new Peer(this.slotId(slot), { debug: 0 });
+    const peer = new this.PeerCtor(this.slotId(slot), { debug: 0 });
     let opened = false;
 
     peer.on('open', () => {
@@ -62,7 +65,8 @@ export class PeerTransport extends BaseTransport {
       this.claimAttempts = 0;
       this.peer = peer;
       this.slot = slot;
-      this._setStatus(this.conns.size ? 'online' : 'connecting', 'Waiting for your partner…');
+      // Registered with the broker = we're reachable. (Session re-sends hello on every 'online'.)
+      this._setStatus('online');
       if (slot === 'b') this._dial();
     });
 
@@ -70,6 +74,7 @@ export class PeerTransport extends BaseTransport {
 
     peer.on('disconnected', () => {
       // Lost the broker (not necessarily the partner). Try to re-register the same id.
+      if (!this.conns.size) this._setStatus('offline', 'Reconnecting…');
       if (!this.closed && !peer.destroyed) this._later(1500, () => !peer.destroyed && peer.reconnect());
     });
 
@@ -100,7 +105,7 @@ export class PeerTransport extends BaseTransport {
         return;
       }
       // network / server-error / socket-error / webrtc: keep trying.
-      this._setStatus(this.conns.size ? 'online' : 'offline', 'Connection trouble — retrying…');
+      if (!opened || (peer.disconnected && !this.conns.size)) this._setStatus('offline', 'Connection trouble — retrying…');
       if (!opened) {
         peer.destroy();
         this._later(3000, () => this._claim(idx));
@@ -161,7 +166,7 @@ export class PeerTransport extends BaseTransport {
     const drop = () => {
       if (this.conns.get(conn.peer)?.conn === conn) this.conns.delete(conn.peer);
       if (!this.conns.size && !this.closed) {
-        this._setStatus('connecting', 'Waiting for your partner…');
+        if (this.peer?.disconnected) this._setStatus('offline', 'Reconnecting…');
         if (this.slot === 'b') this._later(1500, () => this._dial());
       }
     };

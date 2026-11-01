@@ -114,7 +114,7 @@ function Home({ profile, onEditProfile }) {
       </div>
       <button class="btn btn-primary btn-lg" onClick=${create}>✨ Create our room</button>
       <form class="row gap" onSubmit=${join}>
-        <input class="input grow" value=${code} placeholder="Have a code? e.g. K7Q-M2X" aria-label="Room code"
+        <input class="input grow" value=${code} placeholder="Room code" aria-label="Room code"
           maxLength="30" onInput=${(e) => setCode(e.currentTarget.value)} />
         <button class="btn" type="submit" disabled=${!isValidRoomCode(normalizeRoomCode(code))}>Join</button>
       </form>

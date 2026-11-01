@@ -5,8 +5,9 @@
 import { BaseTransport, loadScript } from './transport.js';
 
 export class SupabaseTransport extends BaseTransport {
-  constructor({ room, config }) {
+  constructor({ room, config, createClient = null }) {
     super();
+    this.createClient = createClient; // injectable for tests; otherwise the vendored UMD is loaded
     this.kind = 'supabase';
     this.label = 'Supabase Realtime';
     this.room = room;
@@ -17,9 +18,11 @@ export class SupabaseTransport extends BaseTransport {
 
   async connect() {
     this._setStatus('connecting', 'Connecting to Supabase…');
-    await loadScript(new URL('../vendor/supabase.js', import.meta.url).href);
-    const { createClient } = globalThis.supabase;
-    this.client = createClient(this.config.supabaseUrl, this.config.supabaseAnonKey, {
+    if (!this.createClient) {
+      await loadScript(new URL('../vendor/supabase.js', import.meta.url).href);
+      this.createClient = globalThis.supabase.createClient;
+    }
+    this.client = this.createClient(this.config.supabaseUrl, this.config.supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       realtime: { params: { eventsPerSecond: 50 } },
     });

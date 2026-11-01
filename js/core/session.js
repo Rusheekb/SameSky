@@ -166,6 +166,13 @@ export class Session {
     this._send({ t: 'fx', kind, data });
   }
 
+  /** Re-announce ourselves (e.g. when a phone wakes up and its socket has been idle). */
+  poke() {
+    if (this._stopped) return;
+    this._sendHello(false);
+    this._emit();
+  }
+
   updateProfile(player) {
     this.me = sanitizePlayer({ ...this.me, ...player, id: this.id }, this.id);
     this.dispatch({ type: 'profile', player: this.me });
@@ -230,6 +237,7 @@ export class Session {
 
   _adopt(incoming) {
     if (!incoming || incoming.room !== this.room || !isNewer(incoming, this.state)) return false;
+    if (!looksLikeState(incoming)) return false;
     this.state = incoming;
     this._persist();
     return true;
@@ -346,5 +354,18 @@ export class Session {
     const mod = this.games.get(this.state.game.id);
     if (!mod?.tick) return;
     this._apply({ type: 'tick', by: this.id });
+  }
+}
+
+/** Cheap shape check before adopting a state that arrived over the network. */
+function looksLikeState(st) {
+  if (typeof st !== 'object' || !st.players || typeof st.players !== 'object') return false;
+  if (Object.keys(st.players).length > 3) return false;
+  if (!Array.isArray(st.history) || !st.scores || !st.settings) return false;
+  if (st.game !== null && (typeof st.game !== 'object' || typeof st.game.id !== 'string')) return false;
+  try {
+    return JSON.stringify(st).length < 512 * 1024;
+  } catch {
+    return false;
   }
 }
