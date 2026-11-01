@@ -1,0 +1,11 @@
+{
+  "name": "Same Sky",
+  "short_name": "Same Sky",
+  "description": "Real-time mini-games for long-distance couples.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14102b",
+  "theme_color": "#14102b",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

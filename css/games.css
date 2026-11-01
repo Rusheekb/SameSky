@@ -1,0 +1,8 @@
+/* Per-game styles. Each game owns exactly one file below. */
+@import url('./games/insync.css');
+@import url('./games/knowme.css');
+@import url('./games/thisorthat.css');
+@import url('./games/doodle.css');
+@import url('./games/duet.css');
+@import url('./games/deeptalk.css');
+@import url('./games/story.css');

@@ -1,0 +1,16 @@
+{
+  "name": "same-sky",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Same Sky — real-time mini-games for long-distance couples. Static site, no build step.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node --test \"tests/unit/**/*.test.js\"",
+    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/**/*.test.js\"",
+    "test:all": "npm test && npm run test:e2e"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
