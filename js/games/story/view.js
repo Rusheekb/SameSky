@@ -1,21 +1,21 @@
 import { html, useState, useEffect, useRef } from '../../ui/h.js';
-import { GameHeader, ResultActions, WaitingDots, Avatar, useOnChange } from '../../ui/components.js';
+import { GameHeader, ResultActions, WaitingDots, Avatar, Postmark, Icon, clockIn, useOnChange } from '../../ui/components.js';
 import { meta, MAX_LINE, MAX_TITLE, MAX_TWISTS, MIN_LINES, MAX_LINES, playerLines, storyText, cleanLine, reconcileDraft } from './logic.js';
 
 const TYPING_TTL = 4000; // a "typing" ping keeps the indicator on this long
 const PING_EVERY = 1500; // send at most one ping per this many ms
 const CONJURE_TTL = 20000;
 const STALL_MS = 5000; // a line that hasn't shown up in the story by then gets a gentle "Send again"
-const ALT_COLORS = ['#6ec8ff', '#ffb86b'];
+const ALT_COLORS = ['#7fa8e6', '#ef8a74']; // from the profile palette (js/ui/profile.js)
 const hasWords = (t) => /[\p{L}\p{N}]/u.test(t || '');
 
 const nameOf = (api, id) => api.player(id)?.name || 'Your partner';
 const youOr = (api, id) => (id === api.meId ? 'You' : nameOf(api, id));
 
-/** Each author's highlighter colour (their profile colour; nudged apart if both picked the same). */
+/** Each author's mark colour (their profile colour; nudged apart if both picked the same). */
 function authorColors(api) {
   const [p0, p1] = api.players;
-  const c0 = api.player(p0)?.color || '#ff7eb6';
+  const c0 = api.player(p0)?.color || '#f2b35c';
   let c1 = api.player(p1)?.color || ALT_COLORS[0];
   if (c1.toLowerCase() === c0.toLowerCase()) c1 = c0.toLowerCase() === ALT_COLORS[0] ? ALT_COLORS[1] : ALT_COLORS[0];
   return { [p0]: c0, [p1]: c1 };
@@ -59,6 +59,16 @@ function formatDate(ms) {
   }
 }
 
+/** The postmark under the finished book, as text (mirrors <Postmark>, for "Copy story"). */
+function stampText(api, at) {
+  const here = clockIn(api.me?.tz, at);
+  if (!here) return '';
+  const there = api.partner?.tz && api.partner.tz !== api.me?.tz ? clockIn(api.partner.tz, at) : '';
+  return `Written ${there ? `${here} here · ${there} there` : `${here} for you both`}`;
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 // ------------------------------------------------------------------ the book page
 
 function Book({ s, api, ghostBy, final, pageRef, mode = '' }) {
@@ -100,6 +110,7 @@ function Book({ s, api, ghostBy, final, pageRef, mode = '' }) {
 
   const isNew = (i) => !final && i === n - 1 && i >= seenAtMount.current;
   const label = (id) => (final ? nameOf(api, id) : youOr(api, id));
+  const from = (id) => (!final && id === api.meId ? 'you' : nameOf(api, id));
 
   // Group lines into paragraphs; a twist always stands on its own.
   const blocks = [];
@@ -116,16 +127,17 @@ function Book({ s, api, ghostBy, final, pageRef, mode = '' }) {
     }
     para.items.push({ l, i });
   });
+  // The partner is writing: a pen at the end of the page, in their colour, while they type.
   const ghost =
     ghostBy &&
     html`<span class="sc-ghost" key="ghost" style=${`--hl:${colors[ghostBy]}`} aria-hidden="true">
-      <span class="sc-quill">✒️</span><i>.</i><i>.</i><i>.</i></span>`;
+      <${Icon} name="pen-line" size=${16} /><i>.</i><i>.</i><i>.</i></span>`;
   const lastIsPara = blocks.length && !blocks[blocks.length - 1].twist;
 
   return html`<article class=${`sc-book ${final ? 'final' : mode}`} aria-label=${final ? 'Your finished story' : 'Your story so far'}>
     <div class="sc-page" ref=${ref} onScroll=${final ? undefined : onScroll}>
       <header class="sc-head">
-        ${final ? html`<div class="sc-orn" aria-hidden="true">✦ ✦ ✦</div>` : html`<div class="sc-kicker">Story no. ${s.story}</div>`}
+        <p class="sc-kicker">Story no. ${s.story}</p>
         <h3 class="sc-title">${final ? s.book.title : s.title}</h3>
         ${final && html`<p class="sc-byline">by ${api.players.map((id) => nameOf(api, id)).join(' & ')} · ${formatDate(s.book.at)}</p>`}
         <div class="sc-legend">
@@ -137,14 +149,13 @@ function Book({ s, api, ghostBy, final, pageRef, mode = '' }) {
       <p class="sc-opening">${s.opening}</p>
       ${blocks.map((b, bi) =>
         b.twist
-          ? html`<div key=${`t${b.i}`} class=${`sc-twist ${isNew(b.i) ? 'sc-new' : ''}`} role="note">
-              <span class="sc-twist-tag">✨ Plot twist</span>
+          ? html`<aside key=${`t${b.i}`} class=${`sc-twist ${isNew(b.i) ? 'sc-new' : ''}`} aria-label="Plot twist">
+              <small><${Icon} name="wand" size=${16} />Plot twist from ${from(b.twist.by)}</small>
               <p>${b.twist.text}</p>
-              <small>summoned by ${label(b.twist.by)}</small>
-            </div>`
+            </aside>`
           : html`<p key=${`p${b.i}`} class="sc-para">
               ${b.items.map(
-                ({ l, i }) => html`<span key=${i} class=${`sc-line ${isNew(i) ? 'sc-new' : ''}`} style=${`--hl:${colors[l.by] || '#b69cff'}`}
+                ({ l, i }) => html`<span key=${i} class=${`sc-line ${isNew(i) ? 'sc-new' : ''}`} style=${`--hl:${colors[l.by] || '#a3a9b8'}`}
                   title=${`${nameOf(api, l.by)} wrote this`}>${l.text}</span>${' '}`,
               )}
               ${bi === blocks.length - 1 && ghost}
@@ -154,7 +165,8 @@ function Book({ s, api, ghostBy, final, pageRef, mode = '' }) {
       ${!final && n === 0 && !ghost && html`<p class="sc-empty" aria-hidden="true">…and then?</p>`}
       ${final &&
       html`<p class="sc-epilogue">${s.book.epilogue}</p>
-        <p class="sc-fin">The End</p>`}
+        <p class="sc-fin">The End</p>
+        <p class="sc-stamp"><span>Written</span><${Postmark} me=${api.me} partner=${api.partner} at=${s.book.at} /></p>`}
     </div>
   </article>`;
 }
@@ -164,12 +176,11 @@ function Book({ s, api, ghostBy, final, pageRef, mode = '' }) {
 /** What the waiting player sees: whose turn it is, live "is writing…" while they type. */
 function TurnBanner({ s, api, typing }) {
   const p = api.player(s.turn);
-  const color = authorColors(api)[s.turn];
-  return html`<div class=${`sc-turn ${typing ? 'typing' : ''}`} style=${`--pc:${color}`} aria-live="polite">
+  return html`<div class=${`sc-turn ${typing ? 'typing' : ''}`} aria-live="polite">
     <${Avatar} player=${p} size="sm" />
     ${typing
       ? html`<span class="sc-typing"><b>${nameOf(api, s.turn)}</b> is writing<i>.</i><i>.</i><i>.</i></span>`
-      : html`<span>Waiting for <b>${nameOf(api, s.turn)}</b> to write…</span>`}
+      : html`<span>Waiting for <b>${nameOf(api, s.turn)}</b> to write</span>`}
   </div>`;
 }
 
@@ -216,17 +227,18 @@ function Composer({ s, api, draft }) {
     api.effects.sound('tap');
   };
   const left = MAX_LINE - text.length;
-  const color = authorColors(api)[api.meId];
   const partnerName = api.partner?.name || 'your partner';
   const note = inFlight
     ? html`<small class="sc-left sc-sending">Adding it to the story…</small>`
     : d.restored && ready && !d.sent
-      ? html`<small class="sc-left sc-restored">↺ Didn’t make it in — still here</small>`
-      : html`<small class=${`sc-left ${left <= 20 ? 'near' : ''}`}>${left <= 40 ? `${left} characters left` : 'One or two sentences'}</small>`;
-  return html`<form class="sc-compose" onSubmit=${send} style=${`--pc:${color}`}>
-    <div class="sc-compose-label" aria-live="polite"><i aria-hidden="true">✍️</i><span><b>Your turn</b> — what happens next?</span></div>
+      ? html`<small class="sc-left sc-restored"><${Icon} name="undo-2" size=${16} />Didn’t make it in, still here</small>`
+      : left <= 40
+        ? html`<small class=${`sc-left sc-count ${left <= 20 ? 'near' : ''}`}>${plural(left, 'character')} left</small>`
+        : html`<small class="sc-left">One or two sentences</small>`;
+  return html`<form class="sc-compose" onSubmit=${send}>
+    <div class="sc-compose-label" aria-live="polite"><${Icon} name="pen-line" />Your turn</div>
     <textarea class="input" ref=${ref} rows="2" maxLength=${MAX_LINE} value=${text} aria-label="Your next line" readOnly=${inFlight}
-      enterkeyhint="send" placeholder=${first ? 'Start us off — what happens next?' : 'Add the next sentence (or two)…'}
+      enterkeyhint="send" placeholder=${first ? 'Start us off, what happens next' : 'What happens next'}
       onInput=${(e) => {
         update({ text: e.currentTarget.value, restored: false });
         ping();
@@ -237,12 +249,12 @@ function Composer({ s, api, draft }) {
     ${d.sent &&
     stalled &&
     html`<p class="sc-stall" role="status">
-      <span aria-hidden="true">📶</span><span>This hasn’t reached ${partnerName} yet — your line is safe here. Send it again?</span>
+      <${Icon} name="wifi-off" size=${16} /><span>This hasn’t reached ${partnerName} yet. Your line is safe here, so send it again when you’re ready.</span>
     </p>`}
     <div class="sc-compose-foot" aria-live="polite">
       ${note}
       <button class="btn btn-primary" type="submit" disabled=${!ready || inFlight} aria-busy=${inFlight}>
-        ${inFlight ? 'Adding…' : d.sent ? 'Send again ↻' : 'Add my line ✍️'}
+        ${inFlight ? 'Adding…' : d.sent ? html`<${Icon} name="rotate-ccw" />Send again` : 'Add my line'}
       </button>
     </div>
   </form>`;
@@ -252,28 +264,24 @@ function Tools({ s, api, busy, conjuring, onTwist }) {
   const n = playerLines(s.lines);
   const last = s.lines[s.lines.length - 1];
   const left = MAX_TWISTS - s.twists;
-  const blocked = left <= 0 ? 'all used up' : !last ? 'after the first line' : last.twist ? 'write a line first' : '';
+  const blocked = left <= 0 ? 'All used up' : !last ? 'After the first line' : last.twist ? 'Write a line first' : '';
   const partnerTwisting = conjuring?.what === 'twist';
   const twistNote =
-    busy === 'twist' ? 'summoning…' : partnerTwisting ? `${api.partner?.name || 'Partner'} is summoning…` : blocked || 'shake things up';
+    busy === 'twist' ? 'Summoning…' : partnerTwisting ? `${api.partner?.name || 'Partner'} is summoning…` : blocked || 'Shake things up';
   const canEnd = n >= MIN_LINES;
   const room = MAX_LINES - n;
-  const endNote = !canEnd
-    ? `unlocks in ${MIN_LINES - n} line${MIN_LINES - n === 1 ? '' : 's'}`
-    : room <= 4
-      ? `only ${room} line${room === 1 ? '' : 's'} left!`
-      : 'whenever it feels right';
+  const endNote = !canEnd ? `Unlocks in ${plural(MIN_LINES - n, 'line')}` : room <= 4 ? `${plural(room, 'line')} left in the book` : 'Whenever it feels right';
   return html`<div class="sc-tools">
     <div class="sc-tool">
       <button class="btn sc-twist-btn" onClick=${onTwist} disabled=${!!blocked || !!busy || partnerTwisting}
-        title="Let the narrator throw in a surprise">
-        ✨ Twist! <span class="sc-badge" title=${`${left} left`}>${left}</span>
+        aria-label=${`Twist, ${left} left`} title="Let the narrator throw in a surprise">
+        <${Icon} name="wand" />Twist<span class="sc-uses" aria-hidden="true">${left} left</span>
       </button>
       <small class=${`sc-note ${busy === 'twist' || partnerTwisting ? 'live' : ''}`} aria-live="polite">${twistNote}</small>
     </div>
     <div class="sc-tool">
       <button class=${`btn sc-end-btn ${canEnd ? 'ready' : ''}`} disabled=${!canEnd}
-        onClick=${() => api.act({ type: 'end', ai: !!api.ai.enabled })}>📕 The End</button>
+        onClick=${() => api.act({ type: 'end', ai: !!api.ai.enabled })}><${Icon} name="flag" />The End</button>
       <small class="sc-note">${endNote}</small>
     </div>
   </div>`;
@@ -307,7 +315,7 @@ function TitleForm({ s, api, head }) {
           setVal(e.currentTarget.value);
           ping();
         }} />
-      <button class="btn btn-primary" type="submit" disabled=${!hasWords(val)}>Bind it 📕</button>
+      <button class="btn btn-primary" type="submit" disabled=${!hasWords(val)}>Bind it</button>
     </div>
     <div class="sc-suggest" role="group" aria-label="Suggested titles">
       ${s.ending.suggest.map((t) => {
@@ -318,12 +326,12 @@ function TitleForm({ s, api, head }) {
             setVal(t);
             ping();
             api.effects.sound('tap');
-          }}>${ai && html`<span aria-hidden="true">🪶 </span>`}${t}</button>`;
+          }}>${ai && html`<${Icon} name="feather" size=${16} />`}${t}</button>`;
       })}
     </div>
-    ${late && html`<p class="small sc-late pop-in" role="status">🪶 The narrator caught up: ${lateNote(s.ending)}.</p>`}
-    <p class="muted small sc-naming" aria-live="polite">
-      ${naming ? html`✍️ <b>${api.partner?.name || 'Your partner'}</b> is typing a title too…` : 'Either of you can bind it — first one wins.'}
+    ${late && html`<p class="sc-late pop-in" role="status"><${Icon} name="feather" size=${16} /><span>The narrator caught up: ${lateNote(s.ending)}</span></p>`}
+    <p class=${`sc-naming ${naming ? 'live' : ''}`} aria-live="polite">
+      ${naming ? html`<span><b>${api.partner?.name || 'Your partner'}</b> is typing a title too</span>` : 'Either of you can bind it, first one wins'}
     </p>
   </form>`;
 }
@@ -332,23 +340,21 @@ function Ending({ s, api, unsent }) {
   const e = s.ending;
   const full = playerLines(s.lines) >= MAX_LINES;
   const head = html`<div class="sc-ending-head">
-    <span class="sc-ending-emoji" aria-hidden="true">📕</span>
-    <div><b>${e.auto ? `The book is full — ${MAX_LINES} lines!` : `${youOr(api, e.by)} wrote “The End”`}</b>
-      <small>${e.narrator === 'pending' ? 'Now for the final touch…' : 'Every story deserves a title — or pick one:'}</small></div>
+    <b>${e.auto ? `The book is full at ${MAX_LINES} lines` : `${youOr(api, e.by)} wrote “The End”`}</b>
+    <small>${e.narrator === 'pending' ? 'Now for the final touch' : 'Give it a title, or pick one below'}</small>
   </div>`;
   return html`<div class="stack sc-ending">
     ${e.narrator === 'pending'
-      ? html`<div class="card glow stack center sc-narrator pop-in">
+      ? html`<div class="card stack sc-narrator pop-in">
           ${head}
-          <div class="sc-narrator-icon" aria-hidden="true">🪶</div>
-          <${WaitingDots} text=${e.by === api.meId ? 'The narrator is writing your ending' : `${nameOf(api, e.by)} asked the narrator for an ending`} />
-          <button class="btn btn-ghost btn-sm" onClick=${() => api.act({ type: 'manual', at: e.at })}>We’ll name it ourselves</button>
+          <p class="sc-narrator-status"><${Icon} name="feather" />
+            <${WaitingDots} text=${e.by === api.meId ? 'The narrator is writing your ending' : `${nameOf(api, e.by)} asked the narrator for an ending`} /></p>
+          <button class="btn btn-sm sc-manual" onClick=${() => api.act({ type: 'manual', at: e.at })}>We’ll name it ourselves</button>
         </div>`
       : html`<${TitleForm} s=${s} api=${api} head=${head} key=${e.at} />`}
+    ${!full && unsent && html`<p class="sc-unsent" role="status">Your unfinished line is saved, keep writing to add it</p>`}
     ${!full &&
-    unsent &&
-    html`<p class="muted small center sc-unsent" role="status">✍️ Your unfinished line is saved — “Keep writing” to add it.</p>`}
-    ${!full && html`<button class="btn btn-ghost btn-sm sc-resume" onClick=${() => api.act({ type: 'resume' })}>← Keep writing</button>`}
+    html`<button class="btn btn-ghost btn-sm sc-resume" onClick=${() => api.act({ type: 'resume' })}><${Icon} name="arrow-left" />Keep writing</button>`}
   </div>`;
 }
 
@@ -358,10 +364,11 @@ function Keepsake({ s, api, busy, conjuring, onAgain }) {
   const pageRef = useRef(null);
   const n = playerLines(s.lines);
   const copy = async () => {
-    const text = storyText(s, Object.fromEntries(api.players.map((id) => [id, nameOf(api, id)])));
+    const names = Object.fromEntries(api.players.map((id) => [id, nameOf(api, id)]));
+    const text = storyText(s, names, stampText(api, s.book.at));
     try {
       await navigator.clipboard.writeText(text);
-      api.effects.toast('Story copied — keep it somewhere safe 💌');
+      api.effects.toast('Story copied, keep it somewhere safe');
     } catch {
       // No clipboard permission (or not a secure context): select the page so they can copy it.
       let ok = false;
@@ -375,21 +382,21 @@ function Keepsake({ s, api, busy, conjuring, onAgain }) {
       } catch {
         /* selection is the best we can do */
       }
-      api.effects.toast(ok ? 'Story copied 💌' : 'Story selected — tap Copy to keep it');
+      api.effects.toast(ok ? 'Story copied' : 'Story selected, tap Copy to keep it');
     }
     api.effects.sound('pop');
   };
   const partnerBusy = conjuring?.what === 'again';
   return html`<div class="stack sc-final">
     <div class="result-banner win pop-in sc-result">
-      <h2>Bound & saved 📕</h2>
-      <p>${n} lines · ${s.twists} twist${s.twists === 1 ? '' : 's'} · <b>+${s.gained}</b> together points</p>
-      <button class="btn btn-sm sc-copy" onClick=${copy}>📋 Copy story</button>
+      <h2>Bound & saved</h2>
+      <p class="sc-stats">${plural(n, 'line')} · ${plural(s.twists, 'twist')} · <span class="points">+${s.gained}</span> together points</p>
+      <button class="btn btn-sm sc-copy" onClick=${copy}><${Icon} name="copy" size=${16} />Copy story</button>
     </div>
     <${Book} s=${s} api=${api} final=${true} pageRef=${pageRef} />
     ${(busy === 'again' || partnerBusy) &&
     html`<p class="muted small center sc-hint"><${WaitingDots} text=${busy ? 'Conjuring a fresh opening' : `${api.partner?.name || 'Your partner'} is conjuring a fresh opening`} /></p>`}
-    <${ResultActions} api=${api} onAgain=${busy || partnerBusy ? null : onAgain} againLabel="✍️ Write another" />
+    <${ResultActions} api=${api} onAgain=${busy || partnerBusy ? null : onAgain} againLabel="Write another" />
   </div>`;
 }
 
@@ -413,14 +420,12 @@ export default function StoryView({ s, api }) {
   // Little moments.
   useOnChange(s.lines.length, () => {
     if (!last) return;
-    if (last.twist) {
-      api.effects.sound('whoosh');
-      api.effects.floatEmoji('✨', { count: 3 });
-    } else if (last.by !== api.meId) api.effects.sound('pop');
+    if (last.twist) api.effects.sound('whoosh');
+    else if (last.by !== api.meId) api.effects.sound('pop');
   });
   useOnChange(s.phase === 'ending' ? s.ending.at : 0, () => api.effects.sound('reveal'));
   useOnChange(s.phase === 'final' ? s.plays : 0, () => {
-    api.effects.confetti({ emojis: ['📖', '✨', '💖', '🪶', '⭐', '💫'] });
+    api.effects.confetti({ count: 16 });
     api.effects.sound('success');
   });
 
@@ -494,7 +499,7 @@ export default function StoryView({ s, api }) {
 
   return html`<section class="game story">
     <${GameHeader} meta=${meta} api=${api}>
-      ${s.phase !== 'final' && html`<span class="chip sc-chip" title="Lines written">✍️ ${n}/${MAX_LINES}</span>`}
+      ${s.phase !== 'final' && html`<span class="sc-count" aria-label=${`${n} of ${MAX_LINES} lines written`}>${n}/${MAX_LINES} lines</span>`}
     </${GameHeader}>
 
     ${s.phase === 'final'

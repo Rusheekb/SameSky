@@ -20,7 +20,6 @@ const SEEN_MAX = 100;
 export const meta = {
   id: 'knowme',
   title: 'Know Me Better',
-  emoji: '💭',
   tagline: 'How well do you really know me?',
   description:
     'Take turns in the spotlight: one of you answers a question about yourself while the other secretly guesses your answer. Flip them over together — every match earns together points.',
@@ -163,11 +162,11 @@ export function showValue(q, v) {
 /** Final-screen headline for a play: `{ title, line }`. */
 export function verdict(gained, max = ROUNDS * 2) {
   const r = max > 0 ? gained / max : 0;
-  if (r >= 1) return { title: 'Flawless! 🧠💞', line: 'You two share one brain and it’s adorable.' };
-  if (r >= 0.75) return { title: 'Mind readers! 🔮', line: 'Scary good — nothing gets past you two.' };
-  if (r >= 0.5) return { title: 'Nicely in tune 💫', line: 'With a few fun surprises left to discover.' };
-  if (r >= 0.25) return { title: 'Still a little mysterious 😉', line: 'So much left to learn… sounds like more dates.' };
-  return { title: 'Mysterious lovers 🕵️', line: 'Time for a get-to-know-you deep dive!' };
+  if (r >= 1) return { title: 'Flawless', line: 'You two share one brain, and it’s adorable' };
+  if (r >= 0.75) return { title: 'Mind readers', line: 'Scary good, nothing gets past you two' };
+  if (r >= 0.5) return { title: 'Nicely in tune', line: 'With a few surprises left to discover' };
+  if (r >= 0.25) return { title: 'Still a little mysterious', line: 'So much left to learn, which sounds like more dates' };
+  return { title: 'Mysterious lovers', line: 'Time for a get-to-know-you deep dive' };
 }
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -205,7 +204,7 @@ function highlightLine(r, ctx) {
   const what = `${nameOf(ctx, r.subject)}'s ${lower(r.text)}`;
   const line =
     r.score === 2
-      ? `${g} guessed ${what}: ${r.answer} ✓`
+      ? `${g} knew ${what}: ${r.answer}`
       : r.score === 1
         ? `${g} nearly guessed ${what}: ${r.answer} (said ${r.guess})`
         : `${g} guessed ${what} was ${r.guess} — it’s ${r.answer}`;
@@ -295,6 +294,7 @@ function fresh(ctx, deck, carry) {
     points: carry.points, // total across plays (what the recap adds up)
     totals: carry.totals, // tally summed across plays
     done: false,
+    at: null, // authority time the play ended (stamped on the final screen as a postmark)
     summary: carry.summary,
     highlights: carry.highlights,
   };
@@ -336,6 +336,7 @@ function finish(s, ctx) {
     ...s,
     phase: 'over',
     done: true,
+    at: ctx.now ?? null,
     plays,
     tally,
     totals,

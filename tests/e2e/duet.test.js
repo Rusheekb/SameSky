@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openPair, loadPlaywright, SHOTS } from './harness.js';
 
-const PAPER = [255, 250, 243];
+const PAPER = [241, 233, 218]; // --paper (#f1e9da), the board's background
 
 /** Non-paper pixels on the game's board (sampled), optionally only within [x0, x1] fractions. */
 function inkCount(page, region = null) {
@@ -227,8 +227,8 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
     await t.shot(b, 'duet-ready-b');
     await t.shot(a, 'duet-ready-a');
     await b.getByRole('button', { name: "Agree, it's finished" }).click();
-    await a.getByText('Masterpiece!').waitFor();
-    await b.getByText('Masterpiece!').waitFor();
+    await a.locator('.duet-banner', { hasText: 'Masterpiece' }).waitFor();
+    await b.locator('.duet-banner', { hasText: 'Masterpiece' }).waitFor();
     assert.equal(await a.locator('.draw-tools').count(), 0, 'tools hidden on the framed view');
     assert.ok((await inkCount(a)) > 30 && (await inkCount(b)) > 30, 'masterpiece stays on screen');
     await a.waitForTimeout(1500);
@@ -251,7 +251,7 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
     await t.shot(a, 'duet-draw-a-360');
     await a.getByRole('button', { name: /We're done/ }).click();
     await b.getByRole('button', { name: /We're done/ }).click();
-    await a.getByText('Masterpiece!').waitFor();
+    await a.locator('.duet-banner', { hasText: 'Masterpiece' }).waitFor();
     await a.locator('.duet-thumbs img').first().waitFor();
     await a.waitForTimeout(1500);
     await t.shot(a, 'duet-done-a-360');
@@ -274,7 +274,7 @@ test('Duet Canvas: lost stroke, undo and clear messages heal by themselves; no r
     // The finish row clears the fixed reaction bar on a laptop.
     for (const p of [a, b]) {
       const [cta, bar] = await Promise.all([p.getByRole('button', { name: /We're done/ }).boundingBox(), p.locator('.reactions').boundingBox()]);
-      assert.ok(cta.y + cta.height <= bar.y, `"We're done!" (bottom ${cta.y + cta.height}) above the reaction bar (${bar.y})`);
+      assert.ok(cta.y + cta.height <= bar.y, `"We're done" (bottom ${cta.y + cta.height}) above the reaction bar (${bar.y})`);
     }
     await installLossyNet(a);
     await installLossyNet(b);
@@ -322,7 +322,11 @@ test('Duet Canvas: lost stroke, undo and clear messages heal by themselves; no r
     await b.waitForTimeout(600);
     const [ba, bb] = await Promise.all([storedBoard(a), storedBoard(b)]);
     assert.notDeepEqual(ba, bb, 'the boards really differ now');
-    assert.equal(bb.strokes.length, beforeUndo.strokes.length - 1);
+    // Exactly one line left Blair's board: the one she undid. Compare ids, not counts: when Blair's
+    // id sorts first she asks for a resync right away, and the reply may already carry the first
+    // points of Alex's (still open, dropped) stroke.
+    const gone = beforeUndo.strokes.filter((x) => !bb.strokes.includes(x));
+    assert.equal(gone.length, 1, `undo removed one line on B: ${JSON.stringify({ beforeUndo, bb })}`);
     await t.shot(a, 'duet-lossy-before-a');
     const healed = await waitSameBoards(a, b, { what: 'after lost chunk / stroke / undo' });
     assert.equal(healed.strokes.length, base.strokes.length + 1, 'plus Alex\'s lost stroke; the undone one is gone on both');

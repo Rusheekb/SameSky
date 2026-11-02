@@ -156,7 +156,9 @@ test('a full game: alternating subjects, scoring, tally, summary and highlights'
   assert.ok(s.highlights.length >= 2 && s.highlights.length <= 6);
   assert.ok(s.highlights.every((l) => typeof l === 'string' && l.length <= 200));
   assert.match(s.highlights[s.highlights.length - 1], /^Alex knows Blair \d\/4 · Blair knows Alex \d\/4$/);
-  assert.ok(s.highlights.some((l) => /guessed (Alex|Blair)'s .+: .+ ✓$/.test(l)), s.highlights.join('\n'));
+  assert.ok(s.highlights.some((l) => /^(Alex|Blair) knew (Alex|Blair)'s .+: .+$/.test(l)), s.highlights.join('\n'));
+  assert.ok(!/[!✓]/.test(s.summary + s.highlights.join('')), 'recap lines carry no exclamation marks or tick glyphs');
+  assert.equal(s.at, h.now, 'the final screen is stamped with the authority time (postmark)');
   assert.ok(s.highlights.some((l) => / — it’s /.test(l) || /nearly guessed/.test(l)), 'a miss for flavour');
   // Over: further actions are no-ops.
   for (const a of [{ type: 'next' }, { type: 'answer', value: 1 }, { type: 'skip' }, { type: 'judge', score: 2 }]) {
@@ -168,6 +170,11 @@ test('verdict lines cover every score band', () => {
   const titles = [16, 12, 8, 4, 0].map((g) => km.verdict(g).title);
   assert.equal(new Set(titles).size, 5);
   for (const g of [0, 3, 7, 11, 16]) assert.ok(km.verdict(g).line.length > 5);
+  for (const g of [0, 3, 7, 11, 16]) {
+    const { title, line } = km.verdict(g);
+    assert.ok(!/[!.]$/.test(title) && !/[!.]$/.test(line), 'sentence-case captions, no exclamation or trailing period');
+    assert.ok(!/\p{Extended_Pictographic}/u.test(title + line), 'no decorative emoji');
+  }
 });
 
 // ------------------------------------------------------------------ phases & scoring
@@ -597,7 +604,7 @@ test('summarize: a running summary + highlights from the rounds revealed so far 
   assert.equal(out.summary, 'Alex knew Blair 0/1, Blair knew Alex 2/2 so far (+4 pts)');
   assert.ok(out.highlights.length >= 2 && out.highlights.length <= 6);
   assert.ok(out.highlights.every((l) => typeof l === 'string' && l.length > 0 && l.length <= 200));
-  assert.ok(out.highlights.some((l) => /^Blair guessed Alex's pick number \d: [A-D] ✓$/.test(l)), out.highlights.join('\n'));
+  assert.ok(out.highlights.some((l) => /^Blair knew Alex's pick number \d: [A-D]$/.test(l)), out.highlights.join('\n'));
   assert.ok(out.highlights.some((l) => /^Alex guessed Blair's .+ — it’s /.test(l)), 'the miss');
   assert.equal(out.highlights.at(-1), 'Alex knows Blair 0/1 · Blair knows Alex 2/2 so far');
   assert.deepEqual(km.summarize(s, h.ctx('p1')), out, 'deterministic');

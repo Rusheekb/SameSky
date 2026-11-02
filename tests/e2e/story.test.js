@@ -11,13 +11,24 @@ async function noHorizontalScroll(page) {
 }
 
 const box = (page) => page.getByRole('textbox', { name: 'Your next line' });
+
+/** Emoji only where the couple chose them (avatars); every interface icon in the game is a line icon. */
+async function noInterfaceEmoji(page) {
+  const text = await page.evaluate(() => {
+    const root = document.querySelector('.game.story').cloneNode(true);
+    root.querySelectorAll('.avatar').forEach((el) => el.remove());
+    return root.textContent;
+  });
+  const hit = text.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2726}\u{2766}]/u);
+  assert.ok(!hit, `interface emoji/glyph in the game: ${hit?.[0]}`);
+}
 const MIN_LINES_E2E = 6; // lines before "The End" unlocks
 
 /** `page` writes a line (button or Enter); waits until both pages show it. */
 async function writeLine(page, other, text, { enter = false } = {}) {
   await box(page).fill(text);
   if (enter) await box(page).press('Enter');
-  else await page.getByRole('button', { name: 'Add my line ✍️' }).click();
+  else await page.getByRole('button', { name: 'Add my line' }).click();
   for (const p of [page, other]) await p.locator('.sc-line', { hasText: text }).waitFor();
 }
 
@@ -54,14 +65,15 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
     assert.equal((await b.locator('.sc-title').innerText()).trim(), title);
     assert.equal((await b.locator('.sc-opening').innerText()).trim(), opening);
     assert.ok(!/\{A\}|\{B\}/.test(opening));
-    await turnIs(a, b, 'Waiting for Alex to write…');
-    await a.locator('.sc-chip', { hasText: '0/24' }).waitFor();
+    await turnIs(a, b, 'Waiting for Alex to write');
+    await a.locator('.sc-count', { hasText: '0/24 lines' }).waitFor();
     assert.ok(await a.locator('.sc-twist-btn').isDisabled(), 'no twist before the first line');
     assert.ok(await b.locator('.sc-end-btn').isDisabled(), 'The End locked at the start');
     await settle(a, 600);
     await t.shot(a, 'story-start-a');
     await t.shot(b, 'story-start-b');
     await noHorizontalScroll(a);
+    for (const p of [a, b]) await noInterfaceEmoji(p);
 
     // Live "Alex is writing…" — but never the draft itself.
     const secret = 'SECRETDRAFT nobody should see this';
@@ -71,6 +83,7 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
     assert.ok(!(await b.content()).includes('SECRETDRAFT'), 'draft text never reaches the partner');
     await settle(b, 400);
     await t.shot(b, 'story-partner-typing-b');
+    await noInterfaceEmoji(b);
     await t.shot(a, 'story-typing-a');
     // The indicator expires a few seconds after the last keystroke.
     await b.locator('.sc-turn:not(.typing)', { hasText: 'Waiting for Alex' }).waitFor({ timeout: 7000 });
@@ -93,23 +106,25 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
     await turnIs(a, b, 'Waiting for Alex');
 
     // Blair (not the writer) throws in a twist; it lands on both pages, the turn stays with Alex.
-    await b.getByRole('button', { name: /Twist!/ }).click();
+    await b.getByRole('button', { name: /Twist/ }).click();
     for (const p of [a, b]) await p.locator('.sc-twist').waitFor();
     const twist = (await a.locator('.sc-twist p').innerText()).trim();
     assert.ok(twist.length > 8);
     assert.equal((await b.locator('.sc-twist p').innerText()).trim(), twist);
-    await a.locator('.sc-twist small', { hasText: 'summoned by Blair' }).waitFor();
-    await b.locator('.sc-twist small', { hasText: 'summoned by You' }).waitFor();
+    await a.locator('.sc-twist small', { hasText: 'Plot twist from Blair' }).waitFor();
+    await b.locator('.sc-twist small', { hasText: 'Plot twist from you' }).waitFor();
     await turnIs(a, b, 'Waiting for Alex');
     for (const p of [a, b]) {
       assert.ok(await p.locator('.sc-twist-btn').isDisabled(), 'not two twists in a row');
-      await p.locator('.sc-badge', { hasText: '2' }).waitFor();
+      await p.locator('.sc-uses', { hasText: '2 left' }).waitFor();
+      await p.getByRole('button', { name: 'Twist, 2 left' }).waitFor();
     }
     await b.locator('.sc-note', { hasText: 'write a line first' }).waitFor();
     await a.locator('.sc-note', { hasText: 'unlocks in 4 lines' }).waitFor();
     await settle(a);
     await t.shot(a, 'story-twist-a');
     await t.shot(b, 'story-twist-b');
+    for (const p of [a, b]) await noInterfaceEmoji(p);
 
     await writeLine(a, b, L[2]);
     await writeLine(b, a, L[3]);
@@ -117,7 +132,7 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
     assert.ok(await b.locator('.sc-end-btn').isDisabled(), 'still locked at 5 lines');
     await writeLine(b, a, L[5]);
     for (const p of [a, b]) {
-      await p.locator('.sc-chip', { hasText: '6/24' }).waitFor();
+      await p.locator('.sc-count', { hasText: '6/24 lines' }).waitFor();
       await p.locator('.sc-end-btn.ready:not([disabled])').waitFor();
     }
     await settle(b);
@@ -134,24 +149,25 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
 
     // Alex is mid-sentence when Blair writes "The End" — Alex keeps writing and the draft is still there.
     await box(a).fill('Half a thought');
-    await b.getByRole('button', { name: '📕 The End' }).click();
+    await b.getByRole('button', { name: 'The End' }).click();
     await b.locator('.sc-ending-head', { hasText: 'You wrote “The End”' }).waitFor();
     await a.locator('.sc-ending-head', { hasText: 'Blair wrote “The End”' }).waitFor();
     await a.locator('.sc-unsent', { hasText: 'Your unfinished line is saved' }).waitFor();
     assert.equal(await b.locator('.sc-unsent').count(), 0);
-    await a.getByRole('button', { name: '← Keep writing' }).click();
+    await a.getByRole('button', { name: 'Keep writing' }).click();
     for (const p of [a, b]) await p.locator('.sc-tools').waitFor();
     await turnIs(a, b, 'Waiting for Alex');
     assert.equal(await box(a).inputValue(), 'Half a thought', 'unsent draft survives');
     await writeLine(a, b, L[6]);
 
-    await b.getByRole('button', { name: '📕 The End' }).click();
+    await b.getByRole('button', { name: 'The End' }).click();
     for (const p of [a, b]) await p.locator('.sc-title-form').waitFor();
     assert.equal(await a.locator('.sc-sugg').count(), 4);
     assert.equal((await a.locator('.sc-sugg').first().innerText()).trim(), title, 'working title is suggested');
     await settle(a, 600);
     await t.shot(a, 'story-ending-a');
     await t.shot(b, 'story-ending-b');
+    for (const p of [a, b]) await noInterfaceEmoji(p);
     for (const p of [a, b]) await fitsAboveReactions(p, '.sc-title-form');
 
     // Blair taps a suggestion; Alex types a title and binds the book first.
@@ -160,7 +176,7 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
     const myTitle = 'Kevin, the Bakery Dragon';
     await a.getByPlaceholder(title).pressSequentially(myTitle, { delay: 10 });
     await b.locator('.sc-naming', { hasText: 'Alex is typing a title' }).waitFor();
-    await a.getByRole('button', { name: 'Bind it 📕' }).click();
+    await a.getByRole('button', { name: 'Bind it' }).click();
 
     for (const p of [a, b]) {
       await p.locator('.sc-book.final .sc-title', { hasText: myTitle }).waitFor();
@@ -170,6 +186,11 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
       assert.equal(await p.locator('.sc-book.final .sc-line').count(), 7);
       assert.equal(await p.locator('.sc-book.final .sc-twist').count(), 1);
       assert.ok((await p.locator('.sc-epilogue').innerText()).trim().length > 10);
+      // The postmark is stamped under the finished book (and only there).
+      await p.locator('.sc-book.final .sc-stamp', { hasText: 'Written' }).waitFor();
+      assert.match((await p.locator('.sc-stamp .postmark').innerText()).trim(), /^\d{1,2}:\d{2} [ap]m (for you both|here · \d{1,2}:\d{2} [ap]m there)$/);
+      assert.equal(await p.locator('.game.story .postmark').count(), 1);
+      await noInterfaceEmoji(p);
     }
     await settle(a, 3200); // let the confetti land
     await t.shot(a, 'story-final-a');
@@ -178,13 +199,20 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
 
     // Copy story.
     await a.bringToFront();
-    await a.getByRole('button', { name: '📋 Copy story' }).click();
+    await a.getByRole('button', { name: 'Copy story' }).click();
     await a.locator('#toast', { hasText: /copied|selected/ }).waitFor();
     const clip = await a.evaluate(() => navigator.clipboard.readText().catch(() => ''));
     if (clip) {
-      assert.ok(clip.startsWith(`📖 ${myTitle}\nby Alex & Blair`), clip.slice(0, 80));
-      for (const line of [opening, L[0], L[6], `✨ ${twist}`, '— The End —']) assert.ok(clip.includes(line), `copied text has: ${line}`);
+      assert.ok(clip.startsWith(`${myTitle}\nby Alex & Blair`), clip.slice(0, 80));
+      for (const line of [opening, L[0], L[6], `Plot twist: ${twist}`, '\n\nThe End\n\n']) assert.ok(clip.includes(line), `copied text has: ${line}`);
+      assert.match(clip, /\n\nWritten \d{1,2}:\d{2} [ap]m (for you both|here · \d{1,2}:\d{2} [ap]m there)$/, 'the postmark closes the copy');
     }
+
+    // The keepsake on a laptop.
+    await a.setViewportSize({ width: 1280, height: 800 });
+    await settle(a, 300);
+    await noHorizontalScroll(a);
+    await t.shot(a, 'story-final-1280-a');
 
     // Same book at 360px wide.
     await b.setViewportSize({ width: 360, height: 760 });
@@ -194,7 +222,7 @@ test('Story Chain: write together, twist, The End, title, keepsake, write anothe
     await b.screenshot({ path: `${SHOTS}story-final-full-360-b.png`, fullPage: true });
 
     // Write another: new opening, Blair starts this time, points carried.
-    await b.getByRole('button', { name: '✍️ Write another' }).click();
+    await b.getByRole('button', { name: 'Write another' }).click();
     for (const p of [a, b]) await p.locator('.sc-kicker', { hasText: 'Story no. 2' }).waitFor();
     assert.notEqual((await a.locator('.sc-opening').innerText()).trim(), opening);
     await turnIs(b, a, 'Waiting for Blair');
@@ -260,7 +288,7 @@ test('Story Chain with AI: opening, twists (incl. a failed call), narrator endin
     const L = ['The rose was red and slightly embarrassed.', 'The robot named it Doris.', 'Doris had opinions about fertiliser.', 'The robot wrote them all down.', 'Spring was coming, and so was the flower show.', 'They entered as a team.'];
     await writeLine(a, b, L[0]);
     await writeLine(b, a, L[1]);
-    await b.getByRole('button', { name: /Twist!/ }).click();
+    await b.getByRole('button', { name: /Twist/ }).click();
     for (const p of [a, b]) await p.locator('.sc-twist p', { hasText: 'Then the rose began to sing, very softly, in Italian.' }).waitFor();
     const tw = calls.find((c) => c.task === 'story_twist');
     assert.ok(tw.params.story.includes('rose growing out of its chest') && tw.params.story.includes(L[1]));
@@ -270,7 +298,7 @@ test('Story Chain with AI: opening, twists (incl. a failed call), narrator endin
     await writeLine(a, b, L[2]);
     await writeLine(b, a, L[3]);
     // The AI call fails this time: a built-in twist is used instead.
-    await a.getByRole('button', { name: /Twist!/ }).click();
+    await a.getByRole('button', { name: /Twist/ }).click();
     for (const p of [a, b]) await p.locator('.sc-twist').nth(1).waitFor();
     assert.equal(twistCalls, 2);
     const fallback = (await b.locator('.sc-twist p').nth(1).innerText()).trim();
@@ -285,12 +313,13 @@ test('Story Chain with AI: opening, twists (incl. a failed call), narrator endin
     await fitsAboveReactions(b, '.sc-tools');
 
     // Alex writes "The End": the narrator (AI) writes the title + epilogue for both.
-    await a.getByRole('button', { name: '📕 The End' }).click();
+    await a.getByRole('button', { name: 'The End' }).click();
     await a.locator('.sc-narrator', { hasText: 'The narrator is writing your ending' }).waitFor();
     await b.locator('.sc-narrator', { hasText: 'Alex asked the narrator for an ending' }).waitFor();
     await settle(b, 500);
     await t.shot(a, 'story-ai-narrator-360-a');
     await t.shot(b, 'story-ai-narrator-360-b');
+    for (const p of [a, b]) await noInterfaceEmoji(p);
     for (const p of [a, b]) {
       await p.locator('.sc-book.final .sc-title', { hasText: 'The Singing Rose' }).waitFor();
       await p.locator('.sc-epilogue', { hasText: 'the whole garden hummed along' }).waitFor();
@@ -302,7 +331,7 @@ test('Story Chain with AI: opening, twists (incl. a failed call), narrator endin
     await noHorizontalScroll(b);
 
     // Write another: a fresh AI opening.
-    await b.getByRole('button', { name: '✍️ Write another' }).click();
+    await b.getByRole('button', { name: 'Write another' }).click();
     for (const p of [a, b]) await p.locator('.sc-title', { hasText: 'The Snail Express' }).waitFor();
     const again = calls.filter((c) => c.task === 'story_start').pop();
     assert.ok(again.params.avoid.includes('The Robot Gardener'));
@@ -376,7 +405,7 @@ test('Story Chain: a line lost on the way or racing "The End" is never lost', { 
     await loseLines(f);
     const lost = 'A sentence that got lost somewhere over the sea.';
     await box(f).fill(lost);
-    await f.getByRole('button', { name: 'Add my line ✍️' }).click();
+    await f.getByRole('button', { name: 'Add my line' }).click();
     await f.getByRole('button', { name: 'Adding…' }).waitFor();
     assert.equal(await box(f).inputValue(), lost, 'text kept while it travels');
     assert.ok(await f.getByRole('button', { name: 'Adding…' }).isDisabled());
@@ -386,6 +415,7 @@ test('Story Chain: a line lost on the way or racing "The End" is never lost', { 
     assert.equal(await box(f).getAttribute('readonly'), null, 'editable again once stalled');
     assert.equal(await l.locator('.sc-line', { hasText: lost }).count(), 0);
     await shotsAtBothSizes(t, f, 'story-line-stalled', '.sc-compose');
+    await noInterfaceEmoji(f);
     // The network is back; "Send again" (and the session's own retry) land it exactly once.
     await f.evaluate(() => {
       window.__restoreLines();
@@ -404,8 +434,8 @@ test('Story Chain: a line lost on the way or racing "The End" is never lost', { 
     await loseLines(f);
     const raced = 'This line crossed paths with The End.';
     await box(f).fill(raced);
-    await f.getByRole('button', { name: 'Add my line ✍️' }).click();
-    await l.getByRole('button', { name: '📕 The End' }).click();
+    await f.getByRole('button', { name: 'Add my line' }).click();
+    await l.getByRole('button', { name: 'The End' }).click();
     for (const p of [f, l]) await p.locator('.sc-title-form').waitFor();
     await f.evaluate(() => window.__restoreLines()); // it arrives now, after "The End": rejected
     await settle(f, 3500);
@@ -413,13 +443,13 @@ test('Story Chain: a line lost on the way or racing "The End" is never lost', { 
     await f.locator('.sc-unsent', { hasText: 'Your unfinished line is saved' }).waitFor();
     assert.equal(await l.locator('.sc-unsent').count(), 0, 'only the writer has a line waiting');
     await shotsAtBothSizes(t, f, 'story-line-raced-ending', '.sc-resume');
-    await l.getByRole('button', { name: '← Keep writing' }).click();
+    await l.getByRole('button', { name: 'Keep writing' }).click();
     await f.locator('.sc-compose').waitFor();
     assert.equal(await box(f).inputValue(), raced, 'the raced line is back in the box');
     await f.locator('.sc-restored', { hasText: 'Didn’t make it in' }).waitFor();
-    await f.getByRole('button', { name: 'Add my line ✍️' }).waitFor();
+    await f.getByRole('button', { name: 'Add my line' }).waitFor();
     await shotsAtBothSizes(t, f, 'story-line-restored', '.sc-compose');
-    await f.getByRole('button', { name: 'Add my line ✍️' }).click();
+    await f.getByRole('button', { name: 'Add my line' }).click();
     for (const p of [f, l]) await p.locator('.sc-line', { hasText: raced }).waitFor();
     await turnIs(l, f, /Waiting for/);
     // The next turn starts with an empty box.
@@ -467,20 +497,22 @@ test('Story Chain with AI: a slow narrator never blocks you, and its late ending
     for (let i = 0; i < MIN_LINES_E2E; i++) await writeLine(i % 2 ? b : a, i % 2 ? a : b, `Line ${i + 1}: the cat was curious.`);
 
     // Alex asks the narrator; Blair doesn't want to wait and names it themselves.
-    await a.getByRole('button', { name: '📕 The End' }).click();
+    await a.getByRole('button', { name: 'The End' }).click();
     await b.locator('.sc-narrator', { hasText: 'Alex asked the narrator' }).waitFor();
     await b.getByRole('button', { name: 'We’ll name it ourselves' }).click();
     for (const p of [a, b]) await p.locator('.sc-title-form').waitFor();
     await b.getByPlaceholder('The Lighthouse Cat').fill('Whiskers');
     // The narrator's reply still arrives: first title idea + closing line, nothing snatched away.
     for (const p of [a, b]) {
-      await p.locator('.sc-late', { hasText: 'The narrator caught up: its title is up first, and its closing line will end your book.' }).waitFor({ timeout: 10000 });
-      assert.equal((await p.locator('.sc-sugg').first().innerText()).trim(), '🪶 The Cat Who Kept the Light');
+      await p.locator('.sc-late', { hasText: 'The narrator caught up: its title is up first, and its closing line will end your book' }).waitFor({ timeout: 10000 });
+      assert.equal((await p.locator('.sc-sugg').first().innerText()).trim(), 'The Cat Who Kept the Light');
+      assert.equal(await p.locator('.sc-sugg').first().locator('svg.icon').count(), 1, 'the narrator’s idea is marked with the feather');
       await p.locator('.sc-title-form').waitFor();
     }
     assert.equal(await b.getByPlaceholder('The Lighthouse Cat').inputValue(), 'Whiskers', 'typed title untouched');
     await shotsAtBothSizes(t, a, 'story-ai-late-narrator', '.sc-title-form');
-    await b.getByRole('button', { name: 'Bind it 📕' }).click();
+    await noInterfaceEmoji(a);
+    await b.getByRole('button', { name: 'Bind it' }).click();
     for (const p of [a, b]) {
       await p.locator('.sc-book.final .sc-title', { hasText: 'Whiskers' }).waitFor();
       await p.locator('.sc-epilogue', { hasText: 'the cat still checks the lamp twice' }).waitFor();

@@ -1,209 +1,214 @@
-/* Heart to Heart */
-.game.deeptalk {
-  --dt-l1: linear-gradient(150deg, #ffb37e 0%, #ff7eb6 55%, #c86bd6 100%);
-  --dt-l2: linear-gradient(150deg, #ff7eb6 0%, #b06bff 60%, #6b5bff 100%);
-  --dt-l3: linear-gradient(150deg, #6b5bff 0%, #3b3aa8 55%, #1e2a6e 100%);
-}
-.game.deeptalk .dt-play {
-  gap: 12px;
-}
-
-/* ---- level picker ---- */
-.game.deeptalk .dt-levels {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  padding: 4px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-.game.deeptalk .dt-level {
-  appearance: none;
-  border: 0;
-  font: inherit;
-  font-weight: 800;
-  font-size: 0.92rem;
-  color: var(--muted);
-  background: transparent;
-  min-height: 44px;
-  padding: 6px 4px;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background 0.2s,
-    color 0.2s,
-    box-shadow 0.2s;
-}
-.game.deeptalk .dt-level:focus-visible {
-  outline: 3px solid var(--gold);
-  outline-offset: 1px;
-}
-.game.deeptalk .dt-level.sel {
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-.game.deeptalk .dt-level.sel.lvl-1 {
-  background: var(--dt-l1);
-}
-.game.deeptalk .dt-level.sel.lvl-2 {
-  background: var(--dt-l2);
-}
-.game.deeptalk .dt-level.sel.lvl-3 {
-  background: var(--dt-l3);
-}
-.game.deeptalk .dt-hint {
-  margin: -4px 0 -6px;
-  min-height: 1.2em;
-  color: var(--gold);
-}
-.game.deeptalk .dt-hint-empty {
-  min-height: 0;
-  margin: -6px 0;
-}
-
-/* ---- the card (3D flip) ---- */
-.game.deeptalk .dt-card {
-  perspective: 1400px;
+/* Heart to Heart — the moment is the card: a sealed paper envelope with a lamplight seal that turns
+ * over into the question, written on paper in the display serif. Everything around it stays ink. */
+.game.deeptalk .dt-play,
+.game.deeptalk .dt-end {
   width: 100%;
   max-width: 440px;
   margin: 0 auto;
+}
+.game.deeptalk .dt-play {
+  gap: 16px;
+}
+
+/* ---- level: a quiet segmented control ---- */
+.game.deeptalk .dt-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.game.deeptalk .dt-level {
+  appearance: none;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--text-2);
+  background: transparent;
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.game.deeptalk .dt-level:hover {
+  color: var(--text);
+}
+.game.deeptalk .dt-level.sel {
+  color: var(--text);
+  background: var(--ink-4);
+  border-color: var(--line-2);
+}
+.game.deeptalk .dt-level:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.game.deeptalk .dt-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-2);
+}
+/* Kept in the DOM (it is a live region) but takes no room: cancels the stack gap it sits in. */
+.game.deeptalk .dt-hint-empty {
+  margin: -8px 0;
+}
+
+/* ---- the card ---- */
+.game.deeptalk .dt-card {
+  perspective: 1200px;
+  width: 100%;
 }
 .game.deeptalk .dt-inner {
   position: relative;
   display: grid;
   transform-style: preserve-3d;
-  transition: transform 0.75s cubic-bezier(0.3, 0.9, 0.25, 1.05);
+  transition: transform 560ms var(--ease);
 }
 .game.deeptalk .dt-card.is-flipped .dt-inner {
   transform: rotateY(180deg);
 }
 .game.deeptalk .dt-face {
   grid-area: 1 / 1;
-  min-height: 250px;
-  border-radius: 24px;
-  padding: 22px 20px;
+  position: relative;
+  min-height: 240px;
+  border-radius: var(--r-lg);
+  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   text-align: center;
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  box-shadow: var(--shadow);
 }
+
+/* face down: the envelope */
 .game.deeptalk .dt-front {
   appearance: none;
   font: inherit;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 0;
   cursor: pointer;
-  background:
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.28) 0 2px, transparent 3px) 0 0 / 34px 34px,
-    radial-gradient(circle at 70% 64%, rgba(255, 255, 255, 0.16) 0 1.5px, transparent 2.5px) 0 0 / 26px 26px,
-    var(--dt-l1);
-}
-.game.deeptalk .dt-card.lvl-2 .dt-front {
-  background:
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.24) 0 2px, transparent 3px) 0 0 / 34px 34px,
-    radial-gradient(circle at 70% 64%, rgba(255, 255, 255, 0.14) 0 1.5px, transparent 2.5px) 0 0 / 26px 26px,
-    var(--dt-l2);
-}
-.game.deeptalk .dt-card.lvl-3 .dt-front {
-  background:
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.3) 0 1.5px, transparent 2.5px) 0 0 / 30px 30px,
-    radial-gradient(circle at 70% 64%, rgba(255, 230, 160, 0.25) 0 1px, transparent 2px) 0 0 / 22px 22px,
-    var(--dt-l3);
-}
-.game.deeptalk .dt-front:not(:disabled):hover .dt-front-emoji {
-  transform: scale(1.08) rotate(-6deg);
+  overflow: hidden;
+  justify-content: flex-end;
+  transition: transform var(--t-fast) var(--ease);
 }
 .game.deeptalk .dt-front:not(:disabled):active {
-  filter: brightness(1.08);
+  transform: scale(0.99);
 }
 .game.deeptalk .dt-front:focus-visible {
-  outline: 3px solid var(--gold);
-  outline-offset: 3px;
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 .game.deeptalk .dt-card.is-flipped .dt-front {
   pointer-events: none;
 }
-.game.deeptalk .dt-front-level,
-.game.deeptalk .dt-back-level {
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.18);
+.game.deeptalk .dt-env {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-.game.deeptalk .dt-front-emoji {
-  font-size: 4.2rem;
-  line-height: 1;
-  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.3));
-  transition: transform 0.25s ease;
-  animation: dt-float 3.2s ease-in-out infinite;
+.game.deeptalk .dt-env path {
+  vector-effect: non-scaling-stroke;
 }
-@keyframes dt-float {
-  50% {
-    transform: translateY(-6px) rotate(-4deg);
-  }
+.game.deeptalk .dt-env-fold {
+  fill: none;
+  stroke: rgba(29, 27, 36, 0.12);
+  stroke-width: 1;
+}
+.game.deeptalk .dt-env-shade {
+  fill: rgba(29, 27, 36, 0.06);
+}
+.game.deeptalk .dt-env-flap {
+  fill: var(--paper-2);
+  stroke: rgba(29, 27, 36, 0.12);
+  stroke-width: 1;
+}
+.game.deeptalk .dt-front-level {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--paper-ink-2);
+}
+.game.deeptalk .dt-front .dt-seal {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, -50%);
 }
 .game.deeptalk .dt-front-tap {
-  font-weight: 800;
-  font-size: 0.95rem;
-  opacity: 0.92;
+  position: relative;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--paper-ink-2);
 }
+
+/* the lamplight seal */
+.game.deeptalk .dt-seal {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow:
+    inset 0 0 0 3px rgba(27, 19, 6, 0.12),
+    0 2px 4px rgba(29, 27, 36, 0.25);
+}
+.game.deeptalk .dt-seal-sm {
+  width: 24px;
+  height: 24px;
+  box-shadow: inset 0 0 0 2px rgba(27, 19, 6, 0.12);
+}
+
+/* face up: the question on paper */
 .game.deeptalk .dt-back {
   transform: rotateY(180deg);
-  background:
-    radial-gradient(400px 200px at 50% -10%, rgba(255, 126, 182, 0.22), transparent 70%),
-    linear-gradient(170deg, #2f2566 0%, #231b4d 100%);
-  border: 1px solid rgba(255, 126, 182, 0.35);
 }
-.game.deeptalk .dt-card.lvl-3 .dt-back {
-  background:
-    radial-gradient(400px 200px at 50% -10%, rgba(110, 120, 255, 0.28), transparent 70%),
-    linear-gradient(170deg, #23235e 0%, #171a45 100%);
-  border-color: rgba(140, 150, 255, 0.4);
+.game.deeptalk .dt-back-level,
+.game.deeptalk .dt-first {
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--paper-ink-2);
 }
-.game.deeptalk .dt-card.lvl-1 .dt-back {
-  background:
-    radial-gradient(400px 200px at 50% -10%, rgba(255, 179, 126, 0.24), transparent 70%),
-    linear-gradient(170deg, #34245f 0%, #241b4c 100%);
-  border-color: rgba(255, 179, 126, 0.4);
-}
-.game.deeptalk .dt-back-level {
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.06);
+.game.deeptalk .dt-first {
+  font-size: 14px;
+  line-height: 20px;
 }
 .game.deeptalk .dt-q {
   margin: 0;
-  font-size: 1.32rem;
-  font-weight: 800;
-  line-height: 1.3;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.2;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
 .game.deeptalk .dt-card.compact .dt-face {
   min-height: 0;
-  padding: 14px 16px;
+  padding: 16px;
   gap: 8px;
 }
 .game.deeptalk .dt-card.compact .dt-q {
-  font-size: 1.1rem;
-}
-.game.deeptalk .dt-card.compact .dt-back-level {
-  font-size: 0.7rem;
-  padding: 2px 10px;
-}
-.game.deeptalk .dt-first {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--gold);
+  font-size: 22px;
 }
 
 /* ---- actions ---- */
@@ -212,23 +217,19 @@
 }
 .game.deeptalk .dt-wide {
   width: 100%;
-  max-width: 440px;
 }
 .game.deeptalk .dt-note {
   margin: 0;
-  font-size: 0.8rem;
+  text-align: center;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-2);
 }
 .game.deeptalk .dt-choose {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  max-width: 440px;
-  margin: 0 auto;
-}
-.game.deeptalk .dt-choose .btn {
-  padding: 12px 10px;
-  min-height: 50px;
 }
 @media (min-width: 520px) {
   .game.deeptalk .dt-choose {
@@ -236,107 +237,153 @@
   }
 }
 .game.deeptalk .dt-done-banner {
-  margin: 0 auto;
+  max-width: none;
+  gap: 4px;
+  padding: 16px 20px;
 }
-.game.deeptalk .dt-done-banner h3 {
+.game.deeptalk .dt-done-title {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 24px;
 }
+.game.deeptalk .dt-done-title .icon {
+  color: var(--text-2);
+}
+.game.deeptalk .dt-done-banner p,
 .game.deeptalk .dt-plus {
   margin: 0;
-  font-weight: 900;
-  color: var(--gold);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.game.deeptalk .points {
+  color: var(--accent);
+  font-weight: 500;
 }
 
 /* writing */
 .game.deeptalk .dt-write {
   width: 100%;
-  max-width: 440px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .game.deeptalk .dt-write textarea {
-  min-height: 110px;
-  line-height: 1.4;
+  min-height: 112px;
+  line-height: 22px;
 }
 .game.deeptalk .dt-write-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
 }
-.game.deeptalk .dt-near {
-  color: var(--gold);
+.game.deeptalk .dt-counter {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.game.deeptalk .dt-counter.dt-near {
+  color: var(--text);
 }
 .game.deeptalk .dt-sealed {
   width: 100%;
-  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   text-align: center;
 }
 .game.deeptalk .dt-sealed p {
-  margin: 0 0 6px;
+  margin: 0;
 }
 .game.deeptalk .dt-sealed-title {
-  font-weight: 900;
-  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+}
+.game.deeptalk .dt-sealed-note {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
+}
+.game.deeptalk .dt-sealed p.dt-sealed-wait {
+  margin-top: 8px;
+  font-size: 14px;
 }
 .game.deeptalk .dt-typing {
-  margin: -4px 0 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-2);
 }
 
-/* reveal */
+/* reveal: both answers, side by side, on paper */
 .game.deeptalk .dt-answers {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
   width: 100%;
-  max-width: 440px;
 }
 .game.deeptalk .dt-answers.stacked {
   grid-template-columns: 1fr;
 }
 .game.deeptalk .dt-answer {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-radius: var(--r-md);
+  padding: 16px;
   text-align: left;
   min-width: 0;
-}
-.game.deeptalk .dt-answer:first-child {
-  border-color: rgba(255, 212, 121, 0.45);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 .game.deeptalk .dt-answer-who {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--paper-ink-2);
 }
 .game.deeptalk .dt-answer p {
   margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.25;
   overflow-wrap: anywhere;
-  line-height: 1.4;
+}
+.game.deeptalk .dt-answers.stacked .dt-answer p {
+  font-size: 20px;
 }
 
 /* toolbar */
 .game.deeptalk .dt-toolbar {
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  max-width: 440px;
-  margin: 0 auto;
-}
-.game.deeptalk .dt-toolbar p {
-  margin: 0;
 }
 .game.deeptalk .dt-tools {
   display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px;
 }
 .game.deeptalk .dt-save.on {
-  border-color: var(--gold);
-  background: rgba(255, 212, 121, 0.16);
-  color: var(--gold);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.game.deeptalk .dt-save.on .icon {
+  color: var(--accent);
 }
 .game.deeptalk .dt-foot {
   display: flex;
@@ -344,105 +391,150 @@
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
   padding-top: 8px;
 }
+.game.deeptalk .dt-counts {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.game.deeptalk .dt-counts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.game.deeptalk .btn-sm {
+  min-height: 40px;
+}
 .game.deeptalk .dt-sure {
-  color: var(--gold);
-  background: rgba(255, 212, 121, 0.12);
+  color: var(--text);
+  background: var(--ink-3);
 }
 
-/* ---- end screen ---- */
+/* ---- tonight's letter ---- */
+.game.deeptalk .dt-end {
+  gap: 16px;
+}
 .game.deeptalk .dt-final {
   width: 100%;
-  max-width: 440px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 24px 24px 16px;
   text-align: center;
-  background:
-    radial-gradient(400px 220px at 50% -20%, rgba(255, 126, 182, 0.25), transparent 70%),
-    var(--surface);
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-radius: var(--r-lg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 .game.deeptalk .dt-final p {
   margin: 0;
 }
-.game.deeptalk .dt-final-emoji {
-  font-size: 3.4rem;
-  line-height: 1;
-  animation: dt-float 3.2s ease-in-out infinite;
+.game.deeptalk .dt-final p.dt-closing {
+  margin-top: 8px;
+  max-width: 18em;
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.15;
+  text-wrap: balance;
 }
 .game.deeptalk .dt-final-num {
-  font-size: 1.2rem;
-  font-weight: 700;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--paper-ink-2);
+  font-variant-numeric: tabular-nums;
 }
 .game.deeptalk .dt-final-num b {
-  font-size: 2.2rem;
-  color: var(--pink);
-  margin-right: 4px;
+  font-weight: 500;
+  color: var(--paper-ink);
 }
-.game.deeptalk .dt-closing {
-  font-size: 1.08rem;
-  font-style: italic;
-  color: var(--text);
-  max-width: 32ch;
+.game.deeptalk .dt-postmark {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(29, 27, 36, 0.12);
+  color: var(--paper-ink-2);
+  white-space: normal;
 }
+
 .game.deeptalk .dt-favs {
   width: 100%;
-  max-width: 440px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   text-align: left;
 }
 .game.deeptalk .dt-favs h3 {
-  margin: 4px 0 0;
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.game.deeptalk .dt-favs h3 .icon {
+  color: var(--text-2);
 }
 .game.deeptalk .dt-fav {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--gold);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  animation: fade-up 0.4s ease both;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  animation: rise var(--t-slow) var(--ease) both;
 }
 .game.deeptalk .dt-fav-level {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-3);
 }
 .game.deeptalk .dt-fav-q {
-  margin: 2px 0 0;
-  font-weight: 800;
-  line-height: 1.3;
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
+  overflow-wrap: anywhere;
 }
 .game.deeptalk .dt-fav-answers {
-  margin-top: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 .game.deeptalk .dt-fav-answers p {
   margin: 0;
-  font-size: 0.95rem;
-  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
   overflow-wrap: anywhere;
 }
 .game.deeptalk .dt-fav-answers b {
+  font-weight: 500;
   color: var(--text);
+  margin-right: 4px;
+}
+.game.deeptalk .dt-none {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
 }
 
 @media (max-width: 370px) {
-  .game.deeptalk .dt-level {
-    font-size: 0.84rem;
-  }
   .game.deeptalk .dt-q {
-    font-size: 1.2rem;
+    font-size: 26px;
   }
-  .game.deeptalk .dt-choose .btn {
-    font-size: 0.92rem;
+  .game.deeptalk .dt-closing {
+    font-size: 26px;
   }
 }

@@ -9,7 +9,7 @@ export const CARDS = {
     'What tiny thing made you smile today?',
     'Describe your perfect lazy Sunday, minute by minute.',
     'Which fictional world would you move into for a year?',
-    'What’s the most “you” object in the room right now? Show me!',
+    'What’s the most “you” object in the room right now? Show me.',
     'What’s a weird food combo you secretly love?',
     'If we had a couple’s theme song, what should it be?',
     'What’s your go-to karaoke song, and how committed is the performance?',
@@ -123,12 +123,12 @@ export const LEVEL_COUNT = 3;
 
 /** Warm closing lines for the end screen. */
 export const CLOSINGS = [
-  'Same sky, closer hearts. 💞',
-  'Miles apart, and somehow closer than ever tonight.',
+  'Same sky, closer hearts',
+  'Miles apart, and somehow closer than ever tonight',
   'The distance is just a detail. This was the good stuff.',
-  'Keep these. Reread them on a hard day. 🌙',
-  'Tonight you crossed a few more miles without moving an inch.',
+  'Keep these. Reread them on a hard day.',
+  'Tonight you crossed a few more miles without moving an inch',
   'Every card is a little bridge. You built a few tonight.',
-  'Thank you for letting each other in. 💌',
-  'Talk like this again soon — the sky will wait for you.',
+  'Thank you for letting each other in',
+  'Talk like this again soon — the sky will wait for you',
 ];

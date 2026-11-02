@@ -1,13 +1,30 @@
 import { html, useEffect, useRef, useState } from '../../ui/h.js';
-import { GameHeader, LockStatus, ResultActions, useOnChange } from '../../ui/components.js';
+import { GameHeader, LockStatus, ResultActions, Icon, Postmark, clockIn, useOnChange } from '../../ui/components.js';
 import { DrawingBoard, PALETTE, loadBoard, boardThumb, saveBoardPNG, pruneBoards, slug } from '../../ui/canvas.js';
 import { meta, POINTS_PER_CANVAS } from './logic.js';
 
 const ASPECT = 0.75; // 4:3 — leaves room for the toolbar on a phone screen
 
-// Profile colours (js/ui/profile.js) -> the slightly deeper palette inks that read well on paper.
-const INKS = PALETTE.slice(1, 7).map((p) => p.c);
-const PROFILE_INK = { '#ff7eb6': '#ff5fa2', '#ffb86b': '#ff9b54', '#ffe66d': '#f7c548', '#7ef0c4': '#34c78e', '#6ec8ff': '#45a6f0', '#b69cff': '#9a78ff' };
+// Each player's default pen follows their profile colour (js/ui/profile.js), as the paper ink
+// closest to it. Ink, Night and Moon stay for drawing, never as someone's default.
+const pen = (name) => PALETTE.find((p) => p.name === name).c;
+const INKS = ['Sky', 'Lilac', 'Coral', 'Amber', 'Sage'].map(pen);
+const PROFILE_INK = {
+  // current profile colours
+  '#f2b35c': pen('Amber'),
+  '#ef8a74': pen('Coral'),
+  '#e3cf8f': pen('Amber'),
+  '#7fc8a9': pen('Sage'),
+  '#7fa8e6': pen('Sky'),
+  '#c3a3e6': pen('Lilac'),
+  // colours saved by older versions
+  '#ff7eb6': pen('Coral'),
+  '#ffb86b': pen('Amber'),
+  '#ffe66d': pen('Amber'),
+  '#7ef0c4': pen('Sage'),
+  '#6ec8ff': pen('Sky'),
+  '#b69cff': pen('Lilac'),
+};
 
 function nearestInk(hex) {
   const known = PROFILE_INK[String(hex || '').toLowerCase()];
@@ -31,6 +48,14 @@ export function penColors(api) {
   return { [p1]: a, [p2]: b };
 }
 
+/** The postmark as plain text, for saved images: "9:40 pm here · 11:40 am there". */
+function postmarkText(api) {
+  const here = clockIn(api.me?.tz);
+  if (!here) return '';
+  const tz = api.partner?.tz;
+  return tz && tz !== api.me?.tz ? `${here} here · ${clockIn(tz)} there` : `${here} for you both`;
+}
+
 export default function DuetView({ s, api }) {
   const meId = api.meId;
   const partner = api.partner;
@@ -45,7 +70,7 @@ export default function DuetView({ s, api }) {
 
   useEffect(() => pruneBoards(`${meId}:${s.cid}`), [s.cid]);
   useOnChange(done ? s.plays : 0, () => {
-    api.effects.confetti({ emojis: ['🖌️', '🎨', '💖', '✨', '🌟'] });
+    api.effects.confetti();
     api.effects.sound('success');
   });
   useOnChange(s.shuffles, () => api.effects.sound('whoosh'));
@@ -59,12 +84,13 @@ export default function DuetView({ s, api }) {
   // The ready state lives in the prompt card above the board, so it's seen without scrolling even
   // on a short phone where the finish row sits below the fold (or behind the reaction bar).
   const partnerWaiting = partnerReady && !meReady;
-  const label = partnerWaiting ? `💫 ${pName} thinks it's finished` : meReady ? `✓ You're done · waiting for ${pName}` : 'Draw together';
+  const label = partnerWaiting ? `${pName} thinks it's finished` : meReady ? `You're done, waiting for ${pName}` : 'Draw together';
+  const names = api.players.map((id) => api.player(id)?.name).join(' & ');
 
   const save = () =>
     handle.current?.savePNG({
       caption: s.prompt,
-      sub: `${api.players.map((id) => api.player(id)?.name).join(' & ')} · Same Sky 🌙`,
+      sub: [names, postmarkText(api)].filter(Boolean).join(' · '),
       filename: `duet-${slug(s.prompt)}.png`,
     });
 
@@ -72,42 +98,51 @@ export default function DuetView({ s, api }) {
     <${GameHeader} meta=${meta} api=${api}>${s.n > 1 && html`<span class="chip">Canvas ${s.n}</span>`}</${GameHeader}>
 
     ${done
-      ? html`<div class="result-banner win pop-in duet-banner">
-          <h2>Masterpiece! 🖼️</h2>
-          <p>“${s.prompt}”</p>
-          <span class="chip pts-chip">+${POINTS_PER_CANVAS} together points</span>
+      ? html`<div class="duet-banner pop-in">
+          <h2>Masterpiece</h2>
+          <p><span class="points">+${POINTS_PER_CANVAS}</span> together points</p>
         </div>`
       : html`<div class=${`prompt-card duet-prompt ${partnerWaiting ? 'partner-ready' : ''} ${meReady ? 'me-ready' : ''}`}>
-          <div class="prompt-text pop-in" key=${s.prompt}><small class="ready-note" aria-live="polite" title=${label}>${label}</small><span>${s.prompt}</span></div>
+          <div class="prompt-text pop-in" key=${s.prompt}>
+            <small class="ready-note" aria-live="polite" title=${label}>${meReady && html`<${Icon} name="check" size=${14} />`}${label}</small>
+            <span>${s.prompt}</span>
+          </div>
           ${partnerWaiting
-            ? html`<button class="btn btn-sm agree pop-in" onClick=${() => setReady(true)} aria-label="Agree, it's finished" title="Agree — it's finished">✓</button>`
-            : html`<button class="btn btn-ghost btn-sm shuffle" onClick=${shuffle} aria-label="New prompt" title="New prompt">🔀</button>`}
+            ? html`<button class="btn btn-accent btn-icon agree" onClick=${() => setReady(true)} aria-label="Agree, it's finished" title="Agree, it's finished">
+                <${Icon} name="check" /></button>`
+            : html`<button class="btn btn-ghost btn-icon shuffle" onClick=${shuffle} aria-label="New prompt" title="New prompt">
+                <${Icon} name="shuffle" /></button>`}
         </div>`}
 
     <div class=${`duet-board ${done ? 'framed' : ''}`}>
       <${DrawingBoard} key=${boardKey} api=${api} boardKey=${boardKey} aspect=${ASPECT} handle=${handle}
         canDraw=${!done} tools=${!done} mirrorTool=${true} defaultColor=${pens[meId]}
         canClear=${() => true}
-        onCleared=${(from) => api.effects.toast(`${api.player(from)?.name || 'Your partner'} cleared the canvas ✨`)}
+        onCleared=${(from) => api.effects.toast(`${api.player(from)?.name || 'Your partner'} cleared the canvas`)}
         onInk=${(n) => setInk(n)}
         label=${`Shared drawing: ${s.prompt}`}
-        emptyHint=${done ? '' : 'Both of you can draw here at once ✏️'} />
+        emptyHint=${done ? '' : 'Both of you can draw here at once'} />
+      ${done &&
+      html`<div class="sheet-caption">
+        <span class="sheet-title">${s.prompt}</span>
+        <span class="sheet-meta">${names}${' · '}<${Postmark} me=${api.me} partner=${api.partner} /></span>
+      </div>`}
     </div>
 
     ${done
-      ? html`<div class="stack center">
-          <button class="btn" onClick=${save}>💾 Save as PNG</button>
+      ? html`<div class="stack center duet-after">
+          <button class="btn" onClick=${save}><${Icon} name="download" />Save as PNG</button>
           <${Gallery} s=${s} api=${api} />
           <${ResultActions} api=${api} onAgain=${() => api.act({ type: 'again', n: s.n })} againLabel="New canvas" />
         </div>`
       : html`<div class="stack center duet-finish">
           ${meReady
             ? html`<div class="row center wrap waiting-row">
-                  <${LockStatus} api=${api} locked=${s.ready} labels=${{ done: 'done', waiting: 'still drawing…' }} />
-                  <button class="btn" onClick=${() => setReady(false)}>✏️ Keep drawing</button>
+                  <${LockStatus} api=${api} locked=${s.ready} labels=${{ done: 'done', waiting: 'still drawing' }} />
+                  <button class="btn" onClick=${() => setReady(false)}><${Icon} name="pencil" />Keep drawing</button>
                 </div>`
-            : html`<button class=${`btn btn-primary btn-lg ${partnerReady ? 'glow-pulse' : ''}`} disabled=${!ink} onClick=${() => setReady(true)}>We're done! ✨</button>
-                <p class="muted small">${ink ? (partnerReady ? 'Tap to frame your masterpiece 🖼️' : 'You both tap it when it’s finished') : 'Draw something first — any squiggle counts.'}</p>`}
+            : html`<button class="btn btn-primary btn-lg" disabled=${!ink} onClick=${() => setReady(true)}>We're done</button>
+                <p class="muted small">${ink ? (partnerReady ? 'Tap to frame your masterpiece' : 'You both tap it when it’s finished') : 'Draw something first, any squiggle counts'}</p>`}
         </div>`}
   </section>`;
 }
@@ -130,12 +165,13 @@ function Gallery({ s, api }) {
     setItems(out);
   }, [s.n, s.plays]);
   if (!items.length) return null;
+  const names = api.players.map((id) => api.player(id)?.name).join(' & ');
   return html`<div class="duet-gallery">
-    <small class="muted">Earlier tonight</small>
+    <h3 class="section-label">Earlier tonight</h3>
     <div class="duet-thumbs">
       ${items.map(
         (it) => html`<button key=${it.n} class="thumb-btn" title=${it.prompt} aria-label=${`Save “${it.prompt}”`}
-          onClick=${() => saveBoardPNG(it.board, { aspect: ASPECT, caption: it.prompt, filename: `duet-${slug(it.prompt)}.png` })}>
+          onClick=${() => saveBoardPNG(it.board, { aspect: ASPECT, caption: it.prompt, sub: names, filename: `duet-${slug(it.prompt)}.png` })}>
           <img src=${it.src} alt=${it.prompt} /></button>`,
       )}
     </div>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { openPair, loadPlaywright, SHOTS } from './harness.js';
 import { isNear } from '../../js/games/doodle/logic.js';
 
-const PAPER = [255, 250, 243];
+const PAPER = [241, 233, 218]; // --paper (#f1e9da), the board's background
 
 /** Non-paper pixels on the game's board (sampled), optionally only within [x0, x1] fractions. */
 function inkCount(page, region = null) {
@@ -112,7 +112,7 @@ test('Doodle Dash: live drawing, guesses, a correct answer, four rounds and the 
     await a.getByRole('radio', { name: 'Sky' }).click();
     await a.getByRole('button', { name: 'Bold brush' }).click();
     await scribble(a, [0.2, 0.7], [0.8, 0.7], { wobble: 0.1 });
-    await a.getByRole('radio', { name: 'Pink' }).click();
+    await a.getByRole('radio', { name: 'Coral' }).click();
     await a.getByRole('button', { name: 'Fine brush' }).click();
     await scribble(a, [0.5, 0.15], [0.55, 0.55], { up: false });
     await b.locator('.pen-dot.on').waitFor({ state: 'attached', timeout: 3000 });
@@ -121,11 +121,11 @@ test('Doodle Dash: live drawing, guesses, a correct answer, four rounds and the 
     await waitInk(b, (n) => n > 60, { what: 'doodle on B' });
 
     // ---- guesses stream to the drawer
-    await b.getByPlaceholder('Type a guess…').fill('spaceship');
+    await b.getByPlaceholder('Your guess').fill('spaceship');
     await b.getByRole('button', { name: 'Guess' }).click();
     await a.locator('.bubble', { hasText: 'spaceship' }).waitFor();
-    await b.getByPlaceholder('Type a guess…').fill('blue squiggle');
-    await b.getByPlaceholder('Type a guess…').press('Enter');
+    await b.getByPlaceholder('Your guess').fill('blue squiggle');
+    await b.getByPlaceholder('Your guess').press('Enter');
     await a.locator('.bubble', { hasText: 'blue squiggle' }).waitFor();
     await a.waitForTimeout(400);
     await t.shot(a, 'doodle-draw-a');
@@ -144,16 +144,16 @@ test('Doodle Dash: live drawing, guesses, a correct answer, four rounds and the 
     // ---- a typo-level near miss: "so close!" for both
     const close = nearMiss(word);
     if (close) {
-      await b.getByPlaceholder('Type a guess…').fill(close);
-      await b.getByPlaceholder('Type a guess…').press('Enter');
+      await b.getByPlaceholder('Your guess').fill(close);
+      await b.getByPlaceholder('Your guess').press('Enter');
       await a.locator('.bubble.close', { hasText: 'so close' }).waitFor();
-      await b.locator('.close-pop', { hasText: 'So close!' }).waitFor();
+      await b.locator('.close-pop', { hasText: 'So close, check the spelling' }).waitFor();
       await a.locator('.close-pop', { hasText: `Blair is so close: “${close}”` }).waitFor();
       await t.shot(b, 'doodle-so-close-b');
     }
 
     // ---- correct guess (right after the near miss) -> both see the result and the drawing stays
-    await b.getByPlaceholder('Type a guess…').fill(word.toUpperCase());
+    await b.getByPlaceholder('Your guess').fill(word.toUpperCase());
     await b.getByRole('button', { name: 'Guess' }).click();
     await a.locator('.result-word', { hasText: word }).waitFor();
     await b.locator('.result-word', { hasText: word }).waitFor();
@@ -168,7 +168,7 @@ test('Doodle Dash: live drawing, guesses, a correct answer, four rounds and the 
     await a.waitForTimeout(700);
     await t.shot(a, 'doodle-result-a');
     await t.shot(b, 'doodle-result-b');
-    const pts = Number((await a.locator('.pts-chip').innerText()).match(/\d+/)[0]);
+    const pts = Number((await a.locator('.round-result .points').innerText()).match(/\d+/)[0]);
     assert.ok(pts >= 3 && pts <= 7);
 
     // ---- round 2: Blair draws (on a small phone), board starts empty
@@ -214,8 +214,8 @@ test('Doodle Dash: live drawing, guesses, a correct answer, four rounds and the 
     await a.getByRole('button', { name: 'See our results' }).click();
 
     // ---- final: totals + gallery of all four rounds
-    await a.getByText("That's a wrap!").waitFor();
-    await b.getByText("That's a wrap!").waitFor();
+    await a.getByText("That's a wrap").waitFor();
+    await b.getByText("That's a wrap").waitFor();
     await a.locator('.gallery-item img').nth(3).waitFor();
     await b.locator('.gallery-item img').nth(3).waitFor();
     assert.equal(await a.locator('.gallery-item').count(), 4);

@@ -174,12 +174,40 @@ test('happy path: alternate lines, twist, The End, title, keepsake + recap field
   }
 
   const txt = story.storyText(h.s, { p1: 'Alex', p2: 'Blair' });
-  assert.match(txt, /^📖 The Dragon Who Loved Pastry\nby Alex & Blair\n\n/);
+  assert.match(txt, /^The Dragon Who Loved Pastry\nby Alex & Blair\n\n/);
   assert.ok(txt.includes(h.s.opening));
   assert.ok(txt.includes('The baker turned around and gasped. A tiny dragon was eating the cinnamon roll.'));
-  assert.ok(txt.includes(`✨ ${h.s.lines[2].text}`));
-  assert.ok(txt.endsWith(`${h.s.book.epilogue}\n\n— The End —`));
+  assert.ok(txt.includes(`\n\nPlot twist: ${h.s.lines[2].text}\n\n`), 'a twist stands on its own, marked as the narrator’s');
+  assert.ok(txt.endsWith(`${h.s.book.epilogue}\n\nThe End`));
   assert.ok(!/\n\n\n/.test(txt));
+  assert.ok(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(txt), 'no decorative emoji in the copied keepsake');
+
+  // The view passes the postmark it stamps under the book; it closes the copied text.
+  const stamped = story.storyText(h.s, { p1: 'Alex', p2: 'Blair' }, 'Written 9:40 pm here · 11:40 am there');
+  assert.ok(stamped.endsWith(`${h.s.book.epilogue}\n\nThe End\n\nWritten 9:40 pm here · 11:40 am there`));
+  assert.equal(story.storyText(h.s, {}, '  '), story.storyText(h.s), 'blank stamp and no names: title only, no byline');
+  assert.match(story.storyText(h.s), /^The Dragon Who Loved Pastry\n\n/);
+
+  // Before the book is bound it is just the story so far (what the narrator reads).
+  const draftText = story.storyText({ ...h.s, book: null });
+  assert.ok(draftText.startsWith(h.s.opening) && draftText.includes(`Plot twist: ${h.s.lines[2].text}`));
+  assert.ok(!draftText.includes('The End'));
+});
+
+test('content banks: no decorative emoji or exclamation marks', () => {
+  const all = [...OPENINGS.flatMap((o) => [o.title, o.opening]), ...TWISTS.map((t) => t.text), ...END_TITLES, ...EPILOGUES];
+  for (const t of all) {
+    assert.ok(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(t), t);
+    assert.ok(!t.includes('!'), t);
+  }
+});
+
+test('meta copy: no emoji, no exclamation marks, no trailing period on the tagline', () => {
+  for (const t of [story.meta.title, story.meta.tagline, story.meta.description]) {
+    assert.ok(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(t), t);
+    assert.ok(!t.includes('!'), t);
+  }
+  assert.ok(!/\.$/.test(story.meta.tagline));
 });
 
 test('lines are validated: turn, players only, text type, empty, punctuation-only, oversized, double submit', () => {

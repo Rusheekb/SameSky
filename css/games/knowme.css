@@ -1,4 +1,6 @@
-/* Know Me Better — everything scoped under .game.knowme */
+/* Know Me Better — everything scoped under .game.knowme.
+   Quiet ink chrome around the question; the reveal is the moment: two paper cards turn over and,
+   on a spot-on guess, slide together. */
 
 .game.knowme .km-answer,
 .game.knowme .km-reveal,
@@ -14,12 +16,12 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 18px 16px 20px;
   width: 100%;
-  animation: fade-up 0.35s ease both;
+  padding: 20px 16px 24px;
+  animation: rise var(--t-slow) var(--ease) both;
 }
 .game.knowme .km-prompt.compact {
-  padding: 12px 14px 14px;
+  padding: 16px;
   gap: 4px;
 }
 .game.knowme .km-about {
@@ -28,41 +30,47 @@
   gap: 8px;
   max-width: 100%;
   overflow-wrap: anywhere;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--pink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
 }
 .game.knowme .km-about .avatar,
 .game.knowme .km-tally-who .avatar {
   flex: none;
 }
 .game.knowme .km-about .avatar-sm {
-  width: 26px;
-  height: 26px;
-  font-size: 15px;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
 }
 .game.knowme .km-q {
-  font-size: 1.45rem;
-  line-height: 1.2;
+  font-size: 32px;
+  line-height: 1.1;
   overflow-wrap: anywhere;
 }
 .game.knowme .km-prompt.compact .km-q {
-  font-size: 1.15rem;
+  font-size: 24px;
 }
 .game.knowme .km-ai {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--gold);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-3);
 }
 .game.knowme .km-hint {
-  margin: -4px 0 0;
+  margin: 0;
   text-align: center;
-  color: var(--muted);
-  font-size: 0.95rem;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 22px;
 }
 .game.knowme .km-hint b {
+  font-weight: 500;
   color: var(--text);
 }
 
@@ -77,50 +85,45 @@
 }
 .game.knowme .km-opt {
   min-height: 52px;
-  padding: 10px 14px 10px 10px;
+  padding: 12px 16px 12px 12px;
   gap: 12px;
-  line-height: 1.25;
-  animation: fade-up 0.3s ease both;
+  line-height: 20px;
+  animation: rise var(--t-slow) var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
-.game.knowme .km-opt:nth-child(2) {
-  animation-delay: 40ms;
-}
-.game.knowme .km-opt:nth-child(3) {
-  animation-delay: 80ms;
-}
-.game.knowme .km-opt:nth-child(4) {
-  animation-delay: 120ms;
-}
+/* A quiet keycap, not a coloured pill. */
 .game.knowme .km-letter {
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: 0.85rem;
-  font-weight: 900;
-  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-3);
+  transition:
+    color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
 }
 .game.knowme .km-opt.sel .km-letter {
-  background: var(--pink);
-  border-color: var(--pink);
-  color: #fff;
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 .game.knowme .km-lock {
   width: 100%;
-  min-height: 50px;
-  font-size: 1.05rem;
+  min-height: 48px;
+  font-size: 16px;
 }
 
 /* ---------- 1–10 scale picker ---------- */
 .game.knowme .km-scale-pick {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 10px 10px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 8px 8px 12px;
 }
 .game.knowme .km-scale-btns {
   display: grid;
@@ -131,41 +134,45 @@
   appearance: none;
   min-height: 48px;
   padding: 0;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  /* a gentle gradient from cool (low) to warm (high) */
-  background: color-mix(in srgb, var(--blue) calc(30% - var(--i) * 3%), color-mix(in srgb, var(--pink) calc(var(--i) * 3%), var(--surface-solid)));
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--ink-3);
   color: var(--text);
-  font: inherit;
-  font-weight: 800;
-  font-size: 1rem;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
-    transform 0.12s ease,
-    background 0.2s,
-    box-shadow 0.2s;
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.game.knowme .km-num:hover {
+  background: var(--ink-4);
 }
 .game.knowme .km-num:active {
-  transform: scale(0.92);
+  transform: scale(0.96);
 }
 .game.knowme .km-num:focus-visible {
-  outline: 3px solid var(--gold);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .game.knowme .km-num.sel {
-  background: linear-gradient(135deg, var(--pink) 0%, var(--pink-2) 100%);
-  border-color: transparent;
-  box-shadow: 0 4px 16px rgba(255, 79, 154, 0.45);
-  transform: translateY(-3px);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 .game.knowme .km-scale-labels {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   margin-top: 8px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--muted);
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--text-3);
 }
 .game.knowme .km-scale-labels span:last-child {
   text-align: right;
@@ -179,29 +186,55 @@
 /* ---------- locked / waiting ---------- */
 .game.knowme .km-locked {
   width: 100%;
-  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 20px 16px;
+  text-align: center;
 }
-.game.knowme .km-locked p {
+.game.knowme .km-locked-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
 }
-.game.knowme .km-locked .big {
-  font-size: 1.5rem;
-  margin: 4px 0 6px;
+.game.knowme .km-locked-label .icon {
+  color: var(--text-3);
+}
+.game.knowme .km-locked-value {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.game.knowme .km-locked .waiting,
+.game.knowme .km-wait .waiting {
+  font-size: 14px;
 }
 .game.knowme .km-skip {
   align-self: center;
-  color: var(--muted);
-  font-weight: 700;
+  color: var(--text-2);
 }
-.game.knowme .km-skip small {
-  opacity: 0.8;
+.game.knowme .km-skip .icon {
+  color: var(--text-3);
+}
+.game.knowme .km-skip-left {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-3);
 }
 
-/* ---------- reveal: two flipping cards ---------- */
+/* ---------- reveal: two paper cards turning over ---------- */
 .game.knowme .km-cards {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   width: 100%;
 }
@@ -216,7 +249,7 @@
   grid-template-columns: minmax(0, 1fr);
   height: 100%;
   transform-style: preserve-3d;
-  animation: km-flip 0.75s cubic-bezier(0.25, 0.9, 0.3, 1.15) both;
+  animation: km-flip var(--t-slow) var(--ease) both;
   animation-delay: var(--d, 0ms);
 }
 .game.knowme .km-face {
@@ -224,38 +257,34 @@
   min-width: 0;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  min-height: 132px;
+  border-radius: var(--r-md);
+  min-height: 136px;
 }
 .game.knowme .km-front {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 14px 10px 16px;
-  background: var(--surface-2);
-  transition:
-    border-color 0.3s,
-    box-shadow 0.3s;
+  gap: 8px;
+  padding: 12px 12px 20px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  /* A contact shadow with negative spread, so it never darkens the neighbouring card. */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 16px 24px -12px rgba(0, 0, 0, 0.6);
 }
 .game.knowme .km-back {
   transform: rotateY(180deg);
-  display: grid;
-  place-items: center;
-  font-size: 2.6rem;
-  background:
-    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.18), transparent 50%),
-    linear-gradient(150deg, var(--pink-2), #7b5cff);
+  background: var(--paper-2);
+  box-shadow: inset 0 0 0 1px rgba(29, 27, 36, 0.08);
 }
 .game.knowme .km-face-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--muted);
+  gap: 8px;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--paper-ink-2);
   text-align: left;
   max-width: 100%;
   min-width: 0;
@@ -266,7 +295,6 @@
 /* "<Name>’s guess" on a half-width card: wraps (even inside a long name) rather than being cut. */
 .game.knowme .km-face-who {
   min-width: 0;
-  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 .game.knowme .km-face-label .avatar-sm {
@@ -277,24 +305,43 @@
 .game.knowme .km-face-value {
   max-width: 100%;
   margin: auto 0;
-  font-size: 1.2rem;
-  line-height: 1.2;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.1;
   text-align: center;
   overflow-wrap: anywhere;
 }
-.game.knowme .km-flip.hit .km-front {
-  border-color: rgba(126, 240, 196, 0.75);
-  box-shadow:
-    0 0 0 1px rgba(126, 240, 196, 0.35),
-    0 0 26px rgba(126, 240, 196, 0.25);
+.game.knowme .km-face-value.long {
+  font-size: 22px;
+  line-height: 1.15;
 }
-.game.knowme .km-flip.close .km-front {
-  border-color: rgba(255, 212, 121, 0.7);
-  box-shadow: 0 0 22px rgba(255, 212, 121, 0.2);
+/* Spot on: once both cards have turned, they slide together. */
+.game.knowme .km-cards.hit .km-flip:first-child {
+  animation: km-meet-l var(--t-slow) var(--ease) 640ms both;
 }
-.game.knowme .km-flip.miss .km-front {
-  border-color: rgba(255, 107, 129, 0.5);
+.game.knowme .km-cards.hit .km-flip:nth-child(2) {
+  animation: km-meet-r var(--t-slow) var(--ease) 640ms both;
 }
+@keyframes km-meet-l {
+  to {
+    transform: translateX(4px) rotate(-1deg);
+  }
+}
+@keyframes km-meet-r {
+  to {
+    transform: translateX(-4px) rotate(1deg);
+  }
+}
+@keyframes km-flip {
+  from {
+    transform: rotateY(180deg);
+  }
+  to {
+    transform: none;
+  }
+}
+/* =, ≈ or ≠ where the two cards meet. */
 .game.knowme .km-vs {
   position: absolute;
   left: 50%;
@@ -302,49 +349,35 @@
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
   border-radius: 50%;
-  background: var(--surface-solid);
-  border: 2px solid var(--border);
-  font-weight: 900;
-  font-size: 1.1rem;
-  color: var(--muted);
-  box-shadow: var(--shadow);
-  animation: pop-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4) 0.75s both;
+  background: var(--ink-1);
+  border: 1px solid var(--line-2);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-2);
+  animation: km-badge var(--t-mid) var(--ease) 600ms both;
 }
 .game.knowme .km-vs.hit {
-  border-color: var(--mint);
-  color: var(--mint);
+  color: var(--positive);
+  border-color: color-mix(in srgb, var(--positive) 50%, transparent);
 }
-.game.knowme .km-vs.close {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-.game.knowme .km-vs.miss {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-@keyframes km-flip {
-  0% {
-    transform: rotateY(180deg) scale(0.92);
-  }
-  60% {
-    transform: rotateY(-12deg) scale(1.03);
-  }
-  100% {
-    transform: none;
+@keyframes km-badge {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
   }
 }
 
 /* ---------- reveal: scale track ---------- */
 .game.knowme .km-track-wrap {
   width: 100%;
-  padding: 10px 22px 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  padding: 12px 20px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
 }
 .game.knowme .km-track {
   position: relative;
@@ -355,11 +388,10 @@
   left: 0;
   right: 0;
   top: 50%;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--blue), var(--pink));
-  opacity: 0.85;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--line-2);
 }
 .game.knowme .km-line i {
   position: absolute;
@@ -368,7 +400,7 @@
   height: 4px;
   margin: -2px 0 0 -2px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.75);
+  background: var(--text-3);
 }
 .game.knowme .km-pin {
   position: absolute;
@@ -376,42 +408,59 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   transform: translateX(-50%);
-  animation: km-slide 0.9s cubic-bezier(0.25, 0.9, 0.3, 1.2) 0.35s both;
 }
 .game.knowme .km-pin.up {
-  bottom: calc(50% + 6px);
+  bottom: calc(50% + 4px);
+  animation: km-pin-up var(--t-slow) var(--ease) 360ms both;
 }
 .game.knowme .km-pin.down {
-  top: calc(50% + 6px);
-  animation-delay: 0.55s;
+  top: calc(50% + 4px);
+  animation: km-pin-down var(--t-slow) var(--ease) 480ms both;
 }
 .game.knowme .km-pin b {
-  font-size: 0.85rem;
-  line-height: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
 }
 .game.knowme .km-pin .avatar-sm {
   width: 28px;
   height: 28px;
   font-size: 16px;
 }
-@keyframes km-slide {
+@keyframes km-pin-up {
   from {
-    left: 50%;
     opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+@keyframes km-pin-down {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
   }
 }
 
 /* ---------- judge ---------- */
 .game.knowme .km-judge {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rise var(--t-slow) var(--ease) 560ms both;
 }
 .game.knowme .km-judge-q {
-  margin: 0 0 10px;
-  font-weight: 800;
-  font-size: 1.1rem;
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
   text-align: center;
+}
+.game.knowme .km-judge-q b {
+  font-weight: 500;
 }
 .game.knowme .km-judge-btns {
   display: grid;
@@ -420,90 +469,98 @@
 }
 .game.knowme .km-j {
   flex-direction: column;
-  gap: 2px;
-  min-height: 92px;
-  padding: 10px 6px;
-  border-radius: var(--radius-sm);
-  font-size: 0.92rem;
-  line-height: 1.15;
+  gap: 4px;
+  min-height: 96px;
+  padding: 12px 8px;
+  font-size: 14px;
+  line-height: 20px;
   text-align: center;
 }
-.game.knowme .km-j span {
-  font-size: 1.7rem;
-  line-height: 1.1;
+.game.knowme .km-j .icon {
+  color: var(--text-2);
+  margin-bottom: 4px;
 }
 .game.knowme .km-j small {
-  font-weight: 800;
-  color: var(--muted);
-}
-.game.knowme .km-j.hit {
-  border-color: rgba(126, 240, 196, 0.55);
-  background: rgba(126, 240, 196, 0.12);
-}
-.game.knowme .km-j.close {
-  border-color: rgba(255, 212, 121, 0.5);
-  background: rgba(255, 212, 121, 0.1);
-}
-.game.knowme .km-j.miss {
-  border-color: rgba(255, 107, 129, 0.45);
-  background: rgba(255, 107, 129, 0.08);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--text-3);
 }
 .game.knowme .km-wait {
   width: 100%;
-  font-weight: 700;
+  padding: 16px;
+  text-align: center;
+  animation: rise var(--t-slow) var(--ease) 560ms both;
 }
 .game.knowme .km-wait p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-3);
 }
 
 /* ---------- result ---------- */
+.game.knowme .km-result {
+  max-width: none;
+  gap: 8px;
+}
 .game.knowme .km-result h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.1;
 }
-.game.knowme .km-result.close {
-  background: linear-gradient(135deg, rgba(255, 212, 121, 0.16), rgba(255, 126, 182, 0.1));
-  border-color: rgba(255, 212, 121, 0.4);
+.game.knowme .km-result p {
+  font-size: 15px;
+  line-height: 22px;
 }
 .game.knowme .km-result .btn {
   min-width: 200px;
+  margin-top: 8px;
 }
 
 /* ---------- final ---------- */
 .game.knowme .km-final .result-banner {
   max-width: none;
-  padding: 20px 14px;
+  padding: 24px 16px 20px;
+  gap: 8px;
 }
 .game.knowme .km-final h2 {
   margin: 0;
+  font-size: 36px;
+  line-height: 1.05;
 }
 .game.knowme .km-verdict {
-  font-weight: 700;
+  font-size: 15px;
+  line-height: 22px;
 }
 .game.knowme .km-tally {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   width: 100%;
+  margin: 12px 0 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .game.knowme .km-tally-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
-  border-radius: var(--radius-sm);
-  background: rgba(20, 16, 43, 0.45);
-  border: 1px solid var(--border);
+  gap: 8px;
+  padding: 20px 8px 16px;
   min-width: 0;
+}
+.game.knowme .km-tally-card + .km-tally-card {
+  border-left: 1px solid var(--line);
 }
 .game.knowme .km-tally-who {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  line-height: 1.2;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--text-2);
   text-align: left;
 }
 .game.knowme .km-tally-who > span:last-child {
@@ -511,92 +568,142 @@
   overflow-wrap: anywhere;
 }
 .game.knowme .km-tally-who .avatar-sm {
-  width: 26px;
-  height: 26px;
-  font-size: 15px;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
 }
 .game.knowme .km-tally-score {
-  font-size: 2.2rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 56px;
   line-height: 1;
-  color: var(--pink);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 .game.knowme .km-tally-score small {
-  font-size: 1.1rem;
-  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--text-3);
+}
+.game.knowme .km-tally-note {
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--text-3);
 }
 .game.knowme .km-best {
-  font-weight: 800;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+}
+.game.knowme .km-gained {
+  font-size: 15px;
+  line-height: 22px;
 }
 .game.knowme .km-gained b {
-  color: var(--gold);
-  font-size: 1.2rem;
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
+.game.knowme .km-final .postmark {
+  margin-top: 8px;
+  white-space: normal;
+}
+
+/* ---------- round by round ---------- */
 .game.knowme .km-log {
   width: 100%;
   text-align: left;
+  padding: 0;
+}
+.game.knowme .km-log summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 16px;
+  font-size: 15px;
+}
+.game.knowme .km-log summary::-webkit-details-marker {
+  display: none;
+}
+.game.knowme .km-log summary .icon {
+  color: var(--text-3);
+  transition: transform var(--t-fast) var(--ease);
+}
+.game.knowme .km-log[open] summary .icon {
+  transform: rotate(90deg);
+}
+.game.knowme .km-log summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--r-md);
 }
 .game.knowme .km-log ol {
   list-style: none;
-  padding: 0;
+  margin: 0;
+  padding: 0 16px 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 .game.knowme .km-log li {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
-.game.knowme .km-log li small {
-  display: block;
-  line-height: 1.25;
-}
 .game.knowme .km-mark {
-  flex: none;
   display: grid;
   place-items: center;
   width: 24px;
-  height: 24px;
-  margin-top: 2px;
-  border-radius: 50%;
-  font-size: 0.8rem;
-  font-weight: 900;
-  background: rgba(255, 107, 129, 0.2);
-  color: var(--danger);
+  height: 20px;
+  color: var(--text-3);
 }
 .game.knowme .km-log li.hit .km-mark {
-  background: rgba(126, 240, 196, 0.2);
-  color: var(--mint);
+  color: var(--positive);
 }
 .game.knowme .km-log li.close .km-mark {
-  background: rgba(255, 212, 121, 0.2);
-  color: var(--gold);
+  color: var(--text-2);
+}
+.game.knowme .km-log-q {
+  display: block;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.game.knowme .km-log-a {
+  font-size: 15px;
+  line-height: 20px;
+}
+.game.knowme .km-log-a b {
+  font-weight: 500;
+}
+.game.knowme .km-log-said {
+  color: var(--text-2);
 }
 
 @media (max-width: 370px) {
-  .game.knowme .game-title {
-    font-size: 1.05rem;
-    white-space: nowrap;
-    gap: 6px;
-  }
-  .game.knowme .game-emoji {
-    font-size: 1.3rem;
-  }
   .game.knowme .km-q {
-    font-size: 1.3rem;
+    font-size: 28px;
   }
-  .game.knowme .km-scale-btns {
-    gap: 3px;
+  .game.knowme .km-prompt.compact .km-q {
+    font-size: 22px;
   }
-  .game.knowme .km-num {
-    font-size: 0.92rem;
-    border-radius: 8px;
+  .game.knowme .km-face-value {
+    font-size: 24px;
   }
-  .game.knowme .km-j {
-    font-size: 0.85rem;
+  .game.knowme .km-face-value.long {
+    font-size: 20px;
+  }
+  .game.knowme .km-tally-score {
+    font-size: 48px;
   }
   .game.knowme .km-track-wrap {
-    padding: 10px 18px 8px;
+    padding: 12px 16px;
   }
 }

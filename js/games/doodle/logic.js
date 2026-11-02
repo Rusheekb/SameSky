@@ -21,7 +21,7 @@ export const meta = {
   id: 'doodle',
   title: 'Doodle Dash',
   emoji: '🎨',
-  tagline: 'Draw it, they guess it.',
+  tagline: 'Draw it, they guess it',
   description:
     'Take turns drawing a secret word live while the other guesses as fast as they can. Quicker guesses earn more together points. Four rounds, two each.',
   minPlayers: 2,
@@ -178,7 +178,7 @@ function highlight(r, ctx) {
 
 function summaryOf(log, final) {
   const ok = log.filter((r) => r.ok);
-  if (!ok.length) return `${log.length} doodle${log.length === 1 ? '' : 's'}, none guessed — pure abstract art 🎨`;
+  if (!ok.length) return `${log.length} doodle${log.length === 1 ? '' : 's'}, none guessed, pure abstract art`;
   const best = ok.reduce((a, b) => (b.secs < a.secs ? b : a));
   return `Guessed ${ok.length} of ${final ? ROUNDS : log.length} doodles · fastest: “${best.word}” in ${best.secs}s`;
 }

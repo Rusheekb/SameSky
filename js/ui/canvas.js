@@ -35,6 +35,7 @@
 // happens inside functions that the component calls in the browser.
 
 import { html, useEffect, useRef, useState } from './h.js';
+import { Icon } from './icons.js';
 
 export const SPACE = 1000;
 export const MAX_CHUNK = 60; // points per 'stroke' message
@@ -51,16 +52,17 @@ export const PULL_MAX_MS = 60000; // …backing off (doubling) while mismatches 
 export const MAX_HAVE = 600; // strokes listed in a 'sync?' (a bigger board asks for everything)
 export const MAX_DIGEST_OPEN = 16; // open strokes a digest may leave out
 
-export const PAPER = '#fffaf3';
+// The board is a sheet of paper (--paper in css/app.css); the pens are inks that read on it.
+export const PAPER = '#f1e9da';
 export const PALETTE = [
-  { c: '#2a2148', name: 'Ink' },
-  { c: '#ff5fa2', name: 'Pink' },
-  { c: '#ff9b54', name: 'Peach' },
-  { c: '#f7c548', name: 'Sunshine' },
-  { c: '#34c78e', name: 'Mint' },
-  { c: '#45a6f0', name: 'Sky' },
-  { c: '#9a78ff', name: 'Lavender' },
-  { c: '#ffffff', name: 'White' },
+  { c: '#1d1b24', name: 'Ink' },
+  { c: '#2f4a7a', name: 'Night' },
+  { c: '#4a80c6', name: 'Sky' },
+  { c: '#866abf', name: 'Lilac' },
+  { c: '#d45c4e', name: 'Coral' },
+  { c: '#d68a2c', name: 'Amber' },
+  { c: '#5f8e58', name: 'Sage' },
+  { c: '#fbf8f1', name: 'Moon' },
 ];
 export const SIZES = [
   { v: 5, name: 'Fine' },
@@ -694,32 +696,46 @@ export function newStrokeId(meId, n, rand = Math.random) {
 // Browser-only helpers (never called at import time)
 // ---------------------------------------------------------------------------------------------
 
-/** Render a board to a fresh <canvas> (for PNG export / thumbnails), with an optional caption band. */
+// Exported images use the site's own type and colours (css/app.css): the drawing stays a sheet of
+// paper, captions are set like a letter, and a collage is paper sheets laid out on the night page.
+const FONT_UI = '"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif';
+const FONT_DISPLAY = '"Instrument Serif", "Iowan Old Style", Georgia, serif';
+const FONT_MONO = '"Geist Mono", ui-monospace, Menlo, monospace';
+const NIGHT = '#0b0d14';
+const PAPER_INK = '#1d1b24';
+const PAPER_INK_2 = '#5b5666';
+
+/**
+ * Render a board to a fresh <canvas> (for PNG export / thumbnails). With a caption the sheet grows
+ * a paper band below the drawing: the caption in the display serif, `sub` (names, the postmark) in mono.
+ */
 export function renderBoardImage(board, { width = 1200, aspect = 0.75, bg = PAPER, caption = '', sub = '' } = {}) {
   const h = Math.round(width * aspect);
-  const band = caption ? Math.round(width * 0.14) : 0;
+  const band = caption ? Math.round(width * 0.16) : 0;
   const c = document.createElement('canvas');
   c.width = width;
   c.height = h + band;
   const ctx = c.getContext('2d');
   paintBoard(ctx, board, width, h, bg);
-  if (band) drawCaption(ctx, 0, h, width, band, caption, sub);
+  if (band) drawCaption(ctx, 0, h, width, band, caption, sub, bg);
   return c;
 }
 
-function drawCaption(ctx, x, y, w, hgt, caption, sub) {
-  ctx.fillStyle = '#1d1640';
+function drawCaption(ctx, x, y, w, hgt, caption, sub, bg) {
+  const pad = Math.round(w * 0.04);
+  ctx.fillStyle = bg;
   ctx.fillRect(x, y, w, hgt);
-  const font = 'ui-rounded, "SF Pro Rounded", Nunito, system-ui, sans-serif';
-  const pad = Math.round(hgt * 0.3);
-  ctx.textBaseline = 'middle';
+  // A hairline between the drawing and its caption, inset like a margin on a letter.
+  ctx.fillStyle = 'rgba(29, 27, 36, 0.12)';
+  ctx.fillRect(x + pad, y, w - 2 * pad, Math.max(1, Math.round(w / 600)));
+  ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#f6f1ff';
-  ctx.font = `800 ${Math.round(hgt * 0.3)}px ${font}`;
-  ctx.fillText(fit(ctx, caption, w - 2 * pad), x + pad, y + hgt * 0.38);
-  ctx.fillStyle = '#ffc6e0';
-  ctx.font = `700 ${Math.round(hgt * 0.19)}px ${font}`;
-  ctx.fillText(fit(ctx, sub || 'Same Sky 🌙', w - 2 * pad), x + pad, y + hgt * 0.74);
+  ctx.fillStyle = PAPER_INK;
+  ctx.font = `400 ${Math.round(hgt * 0.34)}px ${FONT_DISPLAY}`;
+  ctx.fillText(fit(ctx, caption, w - 2 * pad), x + pad, y + hgt * 0.5);
+  ctx.fillStyle = PAPER_INK_2;
+  ctx.font = `400 ${Math.round(hgt * 0.13)}px ${FONT_MONO}`;
+  ctx.fillText(fit(ctx, sub || 'Same Sky', w - 2 * pad), x + pad, y + hgt * 0.78);
 }
 
 function fit(ctx, text, max) {
@@ -729,29 +745,29 @@ function fit(ctx, text, max) {
   return `${t}…`;
 }
 
-/** Several boards in a grid, each with a label (e.g. every round of Doodle Dash). */
+/**
+ * Several boards in a grid on the night page, each a paper sheet with a label and an optional
+ * `meta` line under it (e.g. every round of Doodle Dash).
+ */
 export function renderCollage(items, { aspect = 0.75, cols = 2, cell = 600, bg = PAPER, title = '', sub = '' } = {}) {
-  const gap = 24;
-  const label = 56;
-  const head = title ? 96 : 24;
+  const gap = 32;
+  const label = 72;
+  const head = title ? 112 : 32;
+  const foot = 64;
   const rows = Math.max(1, Math.ceil(items.length / cols));
   const ch = Math.round(cell * aspect);
   const c = document.createElement('canvas');
   c.width = cols * cell + (cols + 1) * gap;
-  c.height = head + rows * (ch + label + gap) + 40;
+  c.height = head + rows * (ch + label + gap) + foot - gap;
   const ctx = c.getContext('2d');
-  const font = 'ui-rounded, "SF Pro Rounded", Nunito, system-ui, sans-serif';
-  const g = ctx.createLinearGradient(0, 0, 0, c.height);
-  g.addColorStop(0, '#2a1f5c');
-  g.addColorStop(1, '#14102b');
-  ctx.fillStyle = g;
+  ctx.fillStyle = NIGHT;
   ctx.fillRect(0, 0, c.width, c.height);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
   if (title) {
-    ctx.fillStyle = '#ffd479';
-    ctx.font = `900 44px ${font}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(fit(ctx, title, c.width - 2 * gap), c.width / 2, head / 2 + 6);
+    ctx.fillStyle = '#eef0f5';
+    ctx.font = `400 48px ${FONT_DISPLAY}`;
+    ctx.fillText(fit(ctx, title, c.width - 2 * gap), gap, 72);
   }
   items.forEach((it, i) => {
     const x = gap + (i % cols) * (cell + gap);
@@ -761,20 +777,22 @@ export function renderCollage(items, { aspect = 0.75, cols = 2, cell = 600, bg =
     img.height = ch;
     paintBoard(img.getContext('2d'), it.board, cell, ch, bg);
     ctx.save();
-    roundRect(ctx, x, y, cell, ch, 22);
+    roundRect(ctx, x, y, cell, ch, 12);
     ctx.clip();
     ctx.drawImage(img, x, y);
     ctx.restore();
-    ctx.fillStyle = '#f6f1ff';
-    ctx.font = `800 28px ${font}`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(fit(ctx, it.label || '', cell - 8), x + 4, y + ch + label / 2);
+    ctx.fillStyle = '#eef0f5';
+    ctx.font = `500 26px ${FONT_UI}`;
+    ctx.fillText(fit(ctx, it.label || '', cell), x, y + ch + 36);
+    if (it.meta) {
+      ctx.fillStyle = '#a3a9b8';
+      ctx.font = `400 18px ${FONT_MONO}`;
+      ctx.fillText(fit(ctx, it.meta, cell), x, y + ch + 62);
+    }
   });
-  ctx.fillStyle = '#b8acd9';
-  ctx.font = `700 22px ${font}`;
-  ctx.textAlign = 'right';
-  ctx.fillText(sub || 'Same Sky 🌙', c.width - gap, c.height - 24);
+  ctx.fillStyle = '#7a8296';
+  ctx.font = `400 18px ${FONT_MONO}`;
+  ctx.fillText(fit(ctx, sub || 'Same Sky', c.width - 2 * gap), gap, c.height - 28);
   return c;
 }
 
@@ -1112,16 +1130,23 @@ export function DrawingBoard(props) {
   };
 
   // ----- partner pen dot -----
-  const showPen = (pt, colorHex, ending) => {
+  // A quiet dot in the partner's own colour that follows their pen. It moves with a transform
+  // (not left/top), so following a fast scribble never triggers layout.
+  const showPen = (pt, ending) => {
     const el = penRef.current;
-    if (!el) return;
+    const wrap = wrapRef.current;
+    if (!el || !wrap) return;
     clearTimeout(rt.penTimer);
     if (pt) {
-      el.style.left = `${pt[0] / 10}%`;
-      el.style.top = `${pt[1] / 10}%`;
-      el.style.setProperty('--pen', colorHex);
+      const hidden = !el.classList.contains('on');
+      if (hidden) el.style.transition = 'none'; // appear where the pen is, don't glide in from the last spot
+      el.style.transform = `translate(${(pt[0] / SPACE) * wrap.clientWidth}px, ${(pt[1] / SPACE) * wrap.clientHeight}px)`;
       el.classList.toggle('flip-x', pt[0] > 760); // keep the name tag inside the board
       el.classList.toggle('flip-y', pt[1] > 900);
+      if (hidden) {
+        void el.offsetWidth;
+        el.style.transition = '';
+      }
       el.classList.add('on');
     }
     rt.penTimer = setTimeout(() => el.classList.remove('on'), ending ? 350 : 1200);
@@ -1149,7 +1174,7 @@ export function DrawingBoard(props) {
           // Nothing new to paint, but an empty (or already-synced) last chunk still ends the stroke.
           if (d.end && rt.open.delete(id)) {
             schedule();
-            showPen(null, '', true);
+            showPen(null, true);
           }
           return;
         }
@@ -1160,7 +1185,7 @@ export function DrawingBoard(props) {
         if (d.end) save();
         const pts = Array.isArray(d.pts) ? d.pts : [];
         const last = sanitizePts(pts.slice(-1))[0];
-        if (last || d.end) showPen(last, findStroke(next, id)?.color || '#ff7eb6', !!d.end);
+        if (last || d.end) showPen(last, !!d.end);
       }),
       api.fx.on('undo', (d, from) => {
         if (!okFrom(d, from)) return;
@@ -1330,43 +1355,60 @@ export function DrawingBoard(props) {
   const showClear = !!props.canClear?.(meId);
   const empty = counts.all === 0;
   const partner = api.partner;
+  const penColor = HEX.test(partner?.color || '') ? partner.color : PALETTE[0].c;
 
-  return html`<div class=${`drawboard ${canDraw ? 'can-draw' : 'view-only'}`}>
+  // Toolbar: the eight pens in one row, the tools under them on the same eight columns (pen
+  // sizes as dots, eraser, mirror first; undo and clear under the last two pens). On wider
+  // screens the same two rows stand up as a strip beside the paper (css/canvas.css).
+  return html`<div class=${`drawboard ${canDraw ? 'can-draw' : 'view-only'} ${tools && canDraw ? 'with-tools' : ''}`}>
     <div class="board-wrap" ref=${wrapRef} style=${`--ar:${(1 / aspect).toFixed(4)}`}>
       <canvas class="board-canvas" ref=${canvasRef} role="img"
         aria-label=${props.label || 'Shared drawing'}
         onPointerDown=${onDown} onPointerMove=${onMove} onPointerUp=${onUp} onPointerCancel=${onUp} onLostPointerCapture=${onUp}
         onContextMenu=${(e) => e.preventDefault()}></canvas>
       ${empty && emptyHint && html`<div class="board-hint" aria-hidden="true">${emptyHint}</div>`}
-      <div class="pen-dot" ref=${penRef} aria-hidden="true"><i></i><span>${partner?.name || ''}</span></div>
+      <div class="pen-dot" ref=${penRef} style=${`--pen:${penColor}`} aria-hidden="true"><i></i><span>${partner?.name || ''}</span></div>
       ${props.overlay}
     </div>
     ${tools && canDraw &&
     html`<div class="draw-tools">
-      <div class="palette" role="radiogroup" aria-label="Colour">
+      <div class="palette" role="radiogroup" aria-label="Pen colour">
         ${PALETTE.map(
-          (p) => html`<button type="button" key=${p.c} role="radio" aria-checked=${!eraser && color === p.c} aria-label=${p.name}
+          (p) => html`<button type="button" key=${p.c} role="radio" aria-checked=${!eraser && color === p.c} aria-label=${p.name} title=${p.name}
             class=${`swatch-btn ${!eraser && color === p.c ? 'sel' : ''}`} style=${`--c:${p.c}`} onClick=${() => pickColor(p.c)}><i></i></button>`,
         )}
       </div>
       <div class="tool-row">
         ${SIZES.map(
           (s, i) => html`<button type="button" key=${s.name} class=${`tool size-btn ${sizeIx === i ? 'sel' : ''}`} aria-pressed=${sizeIx === i}
-            aria-label=${`${s.name} brush`} onClick=${() => setSizeIx(i)}>
-            <i style=${`width:${6 + i * 6}px;height:${6 + i * 6}px;background:${eraser ? '#fff' : color}`}></i></button>`,
+            aria-label=${`${s.name} brush`} title=${s.name} onClick=${() => setSizeIx(i)}><i class=${`size-dot size-${i}`}></i></button>`,
         )}
         <button type="button" class=${`tool ${eraser ? 'sel' : ''}`} aria-pressed=${eraser} aria-label="Eraser" title="Eraser"
-          onClick=${() => setEraser(!eraser)}><span class="tool-ico">🧽</span></button>
+          onClick=${() => setEraser(!eraser)}><${Icon} name="eraser" /></button>
         ${mirrorTool &&
         html`<button type="button" class=${`tool ${mirror ? 'sel' : ''}`} aria-pressed=${mirror} aria-label="Mirror mode" title="Mirror mode"
-          onClick=${() => setMirror(!mirror)}><span class="tool-ico">🦋</span></button>`}
+          onClick=${() => setMirror(!mirror)}><${MirrorIcon} /></button>`}
+        <span class="tool-gap" aria-hidden="true"></span>
         <button type="button" class="tool" aria-label="Undo" title="Undo my last line" disabled=${!counts.mine} onClick=${undo}>
-          <span class="tool-ico">↶</span></button>
+          <${Icon} name="undo-2" /></button>
         ${showClear &&
         html`<button type="button" class=${`tool tool-clear ${armed ? 'armed' : ''}`} aria-label=${armed ? 'Tap again to clear' : 'Clear'}
           title="Clear the canvas" disabled=${empty && !armed} onClick=${clear}>
-          ${armed ? html`<span class="tool-txt">Sure?</span>` : html`<span class="tool-ico">🗑️</span>`}</button>`}
+          ${armed ? html`<span class="tool-txt">Sure?</span>` : html`<${Icon} name="trash-2" />`}</button>`}
       </div>
     </div>`}
   </div>`;
+}
+
+/**
+ * lucide "flip-vertical-2" (a mirror axis with a shape on each side), drawn like <Icon>: 18px,
+ * 1.5 stroke, currentColor. Not in js/ui/icons.js yet; swap for <Icon name="flip-vertical-2" /> once it is.
+ */
+function MirrorIcon() {
+  return html`<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M12 14v2" /><path d="M12 20v2" /><path d="M12 2v2" /><path d="M12 8v2" />
+    <path d="M20.288 16.703A1 1 0 0 0 22 16V8a1 1 0 0 0-1.712-.703l-3.99 3.991a1 1 0 0 0-.001 1.424z" />
+    <path d="M3.712 16.703A1 1 0 0 1 2 16V8a1 1 0 0 1 1.712-.703l3.99 3.991a1 1 0 0 1 .001 1.424z" />
+  </svg>`;
 }

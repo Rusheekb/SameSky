@@ -1,6 +1,6 @@
 // Duet Canvas — both of you draw on one shared canvas at the same time, with a prompt on top.
 //
-// Phases: draw -> done -> (draw ...). "We're done!" needs both of you (so nobody gets cut off
+// Phases: draw -> done -> (draw ...). "We're done" needs both of you (so nobody gets cut off
 // mid-line); a finished canvas is worth 3 together points. Strokes live in fx, never in state.
 
 import { PROMPTS, VIBE_ORDER, ALL_PROMPTS } from '../../content/duet.js';
@@ -14,7 +14,7 @@ export const meta = {
   id: 'duet',
   title: 'Duet Canvas',
   emoji: '🖌️',
-  tagline: 'Draw together, live.',
+  tagline: 'Draw together, live',
   description:
     'One canvas, two pens, zero rules. Draw the prompt together in real time and watch each other’s lines appear. Finish it together to frame your masterpiece.',
   minPlayers: 2,
@@ -102,7 +102,7 @@ function summaryOf(finished) {
 /**
  * Actions carry what the player was looking at, so a late or raced one is ignored:
  *   { type: 'newPrompt', from }   `from` = the prompt being replaced (required: if both of you
- *                                 tap 🔀 at once, only the first swap happens)
+ *                                 tap shuffle at once, only the first swap happens)
  *   { type: 'ready', on, n?, from? }   `n` = canvas number, `from` = the prompt it was for
  *   { type: 'again', n? }
  */

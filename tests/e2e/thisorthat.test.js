@@ -14,7 +14,7 @@ async function tap(page, slot, side) {
 }
 
 async function roundChip(page, n) {
-  await page.locator('.game-header .tot-round', { hasText: new RegExp(`^${n}/10$`) }).waitFor({ timeout: 10000 });
+  await page.locator('.game-header .chip', { hasText: new RegExp(`(^|\\D)${n} / 10$`) }).waitFor({ timeout: 10000 });
 }
 
 /**
@@ -55,8 +55,8 @@ test('This or That: pick, predict, reveal, auto-advance, results', { skip: !load
     await t.startGame('thisorthat');
     await roundChip(a, 1);
     await roundChip(b, 1);
-    await a.getByText('Blair would pick…').waitFor();
-    await b.getByText('Alex would pick…').waitFor();
+    await a.getByText('Blair would pick', { exact: true }).waitFor();
+    await b.getByText('Alex would pick', { exact: true }).waitFor();
     await t.shot(a, 'thisorthat-pick-a');
     const optA = (await a.locator('.tot-opts.mine .tot-a').innerText()).trim();
     const optB = (await a.locator('.tot-opts.mine .tot-b').innerText()).trim();
@@ -70,7 +70,7 @@ test('This or That: pick, predict, reveal, auto-advance, results', { skip: !load
     await a.locator('.tot-locked').waitFor();
     await a.getByText('Waiting for Blair to choose').waitFor();
     await b.locator('.lock.is-locked', { hasText: 'Alex' }).waitFor();
-    await b.getByText('Alex has locked in — your turn!').waitFor();
+    await b.getByText('Alex has locked in — your turn', { exact: true }).waitFor();
     // Secrecy: Blair sees nothing of Alex's choices before the reveal.
     assert.equal(await b.locator('.tot-opt.sel').count(), 0);
     assert.equal(await b.locator('.tot-locked, .reveal-card').count(), 0);
@@ -82,12 +82,12 @@ test('This or That: pick, predict, reveal, auto-advance, results', { skip: !load
     await tap(b, 'mine', 'a');
     await tap(b, 'guess', 'a');
     for (const p of [a, b]) await p.locator('.tot-rcard').nth(1).waitFor();
-    await a.getByText(`You both chose ${optA} 💞`).waitFor();
-    await b.getByText(`You both chose ${optA} 💞`).waitFor();
-    await a.getByText('Blair read your mind ✓').waitFor();
-    await a.getByText('You guessed wrong ✗').waitFor();
-    await b.getByText('Alex guessed wrong ✗').waitFor();
-    await b.getByText("You read Alex's mind ✓").waitFor();
+    await a.getByText(`You both chose ${optA}`, { exact: true }).waitFor();
+    await b.getByText(`You both chose ${optA}`, { exact: true }).waitFor();
+    await a.getByText('Blair read your mind', { exact: true }).waitFor();
+    await a.getByText('You guessed wrong', { exact: true }).waitFor();
+    await b.getByText('Alex guessed wrong', { exact: true }).waitFor();
+    await b.getByText("You read Alex's mind", { exact: true }).waitFor();
     await a.getByText('+2 together points').waitFor();
     await a.locator('.tot-count').waitFor();
     await settle(a, 900);
@@ -124,7 +124,7 @@ test('This or That: pick, predict, reveal, auto-advance, results', { skip: !load
       await a.locator('.tot-rcard').nth(1).waitFor();
       await b.locator('.tot-rcard').nth(1).waitFor();
       if (r === 3) {
-        await b.getByText("You split on this one ⚡").waitFor();
+        await b.getByText('You split on this one', { exact: true }).waitFor();
         await settle(b, 900);
         await t.shot(b, 'thisorthat-reveal-split-360');
         await noHorizontalScroll(b);
@@ -136,8 +136,8 @@ test('This or That: pick, predict, reveal, auto-advance, results', { skip: !load
     // --- Results on both screens.
     for (const p of [a, b]) await p.locator('.tot-final').waitFor();
     await a.getByText('60%').waitFor();
-    await a.getByText('Beautifully in tune 🎶').waitFor();
-    await a.getByText('Talk about these! 💬').waitFor();
+    await a.getByText('Beautifully in tune', { exact: true }).waitFor();
+    await a.getByText('Talk about these', { exact: true }).waitFor();
     assert.equal(await a.locator('.tot-talk li').count(), 4);
     await a.getByText('+25 together points this game').waitFor();
     await a.locator('.tot-mind', { hasText: 'You read Blair' }).getByText('9/10').waitFor();

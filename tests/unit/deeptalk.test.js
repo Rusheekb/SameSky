@@ -210,7 +210,9 @@ test('finish: done, summary, highlights from favourites, closing line; then froz
   assert.equal(h.s.phase, 'done');
   assert.equal(h.s.done, true);
   assert.equal(h.s.points, 2);
-  assert.match(h.s.summary, /^Shared 2 heart-to-heart cards and went deep · 2 saved ⭐$/);
+  assert.match(h.s.summary, /^Shared 2 heart-to-heart cards and went deep · 2 saved$/);
+  assert.ok(!/[!⭐💞💌]/u.test(h.s.summary), 'no exclamation or emoji in the recap line');
+  assert.equal(h.s.endedAt, h.now, 'stamped with the time it finished (the postmark on the keepsake)');
   assert.equal(h.s.highlights.length, 2);
   assert.ok(h.s.highlights.every((x) => x.length <= 110));
   assert.ok(CLOSINGS.includes(h.s.closing));
@@ -380,7 +382,7 @@ test('summarize: shared count and saved favourites so far; pure; finished games 
   const sum = dt.summarize(deepFreeze(h.s), h.ctx());
   assert.equal(JSON.stringify(h.s), before, 'never mutates');
   assert.equal(h.s.done, false);
-  assert.equal(sum.summary, 'Shared 4 heart-to-heart cards and kept it light · 3 saved ⭐');
+  assert.equal(sum.summary, 'Shared 4 heart-to-heart cards and kept it light · 3 saved');
   assert.deepEqual(sum.highlights, texts.slice(0, 3).map(short));
   assert.ok(!JSON.stringify(sum).includes('SECRET'));
   assert.deepEqual(dt.summarize(h.s, h.ctx()), sum, 'deterministic');
@@ -399,7 +401,7 @@ test('summarize: shared count and saved favourites so far; pure; finished games 
   const id = k.s.card.id;
   k.act('p1', { type: 'flip', card: id });
   k.act('p1', { type: 'save', card: id, on: true });
-  assert.deepEqual(dt.summarize(k.s, k.ctx()), { summary: 'Saved 1 heart-to-heart card ⭐', highlights: [short(k.s.card.text)] });
+  assert.deepEqual(dt.summarize(k.s, k.ctx()), { summary: 'Saved 1 heart-to-heart card', highlights: [short(k.s.card.text)] });
 
   // Finished with "Finish for tonight": exactly what the end screen recorded.
   g.act('p2', { type: 'finish' });
@@ -432,7 +434,7 @@ test('leaving through ✕ keeps the conversation in the night recap', () => {
   st = room.reduce(st, { type: 'endGame', by: 'p1' }, ctx);
   const entry = st.history.at(-1);
   assert.equal(entry.id, 'deeptalk');
-  assert.equal(entry.summary, 'Shared 4 heart-to-heart cards and kept it light · 3 saved ⭐');
+  assert.equal(entry.summary, 'Shared 4 heart-to-heart cards and kept it light · 3 saved');
   assert.deepEqual(entry.highlights, saved.map(short));
   assert.equal(entry.points, 4);
 });

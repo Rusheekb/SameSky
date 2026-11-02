@@ -13,24 +13,28 @@ test('In Sync: two players reveal, link words and sync', { skip: !loadPlaywright
 
     await t.startGame('insync', b);
     await t.shot(a, 'insync-pick');
-    await a.getByPlaceholder('Your word…').fill('Sunrise');
+    await a.getByPlaceholder('Your word').fill('Sunrise');
     await a.getByRole('button', { name: 'Lock in' }).click();
     await b.locator('.lock.is-locked', { hasText: 'Alex' }).waitFor();
-    await b.getByPlaceholder('Your word…').fill('Beach');
+    await b.getByPlaceholder('Your word').fill('Beach');
     await b.getByRole('button', { name: 'Lock in' }).click();
 
     await a.locator('.reveal-card', { hasText: 'Beach' }).waitFor();
     await b.locator('.reveal-card', { hasText: 'Sunrise' }).waitFor();
+    await b.waitForTimeout(900); // let the paper cards finish turning over
     await t.shot(b, 'insync-reveal');
     await b.getByRole('button', { name: /Next round/ }).click();
     await a.locator('.word-chip', { hasText: 'Beach' }).waitFor();
 
-    await a.getByPlaceholder('Your word…').fill('Morning');
+    await a.getByPlaceholder('Your word').fill('Morning');
     await a.getByRole('button', { name: 'Lock in' }).click();
-    await b.getByPlaceholder('Your word…').fill('mornings');
+    await b.getByPlaceholder('Your word').fill('mornings');
     await b.getByRole('button', { name: 'Lock in' }).click();
-    await a.getByText('In sync!').waitFor();
-    await b.getByText('In sync!').waitFor();
+    await a.locator('.result-banner h2', { hasText: /^In sync$/ }).waitFor();
+    await b.locator('.result-banner h2', { hasText: /^In sync$/ }).waitFor();
+    // The keepsake is stamped with both local times.
+    await a.locator('.result-banner .postmark').waitFor();
+    await a.waitForTimeout(1200); // the cards turn over, then slide together
     await t.shot(a, 'insync-synced');
 
     await t.backToLobby(b);

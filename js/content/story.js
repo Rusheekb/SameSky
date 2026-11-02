@@ -3,7 +3,7 @@
 // OPENINGS  – a title + one or two opening sentences, tagged by vibe (sweet|flirty|silly|deep)
 //             and a flavour (cosy|adventure|mystery|romance|fantasy|comedy).
 //             `{A}` / `{B}` are replaced with the two players' names (players[0] / players[1]).
-// TWISTS    – narrator lines dropped in when someone taps "✨ Twist!". `vibe: 'any'` fits every story.
+// TWISTS    – narrator lines dropped in when someone taps "Twist". `vibe: 'any'` fits every story.
 // END_TITLES – suggested titles for when you bind the finished book.
 // EPILOGUES – a closing flourish for the keepsake page when the AI isn't writing one.
 

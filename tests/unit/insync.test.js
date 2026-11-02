@@ -14,6 +14,8 @@ test('sync on first try scores 10', () => {
   assert.equal(h.s.done, true);
   assert.equal(h.s.points, 10);
   assert.ok(h.s.highlights.length === 1);
+  assert.equal(h.s.at, h.now, 'the result is stamped with the authority time (postmark)');
+  assert.ok(!/!/.test(h.s.summary + h.s.highlights.join('')), 'no exclamation marks in recap lines');
 });
 
 test('mismatch -> next round links the two words; locked answers are final', () => {

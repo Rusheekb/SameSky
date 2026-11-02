@@ -14,8 +14,7 @@ const SLOTS = ['mine', 'guess'];
 export const meta = {
   id: 'thisorthat',
   title: 'This or That',
-  emoji: '⚖️',
-  tagline: 'Pick yours, predict theirs.',
+  tagline: 'Pick yours, predict theirs',
   description:
     'Ten quick dilemmas. Tap what you would pick, then what you think your partner picked. Reveal together: matching picks and good guesses earn together points.',
   minPlayers: 2,
@@ -117,6 +116,7 @@ function fresh(d, carry = { points: 0, summary: '', highlights: [], plays: 0 }) 
     rounds: [], // [{ mine: {id: side}, guess: {id: side}, same, right: {id: bool}, gained }]
     nextAt: 0,
     done: false,
+    endedAt: 0, // authority time the play finished (stamped on the results as a postmark)
     plays: carry.plays,
     gained: 0, // points from the current play
     points: carry.points,
@@ -194,6 +194,7 @@ function finish(s, ctx) {
     phase: 'over',
     nextAt: 0,
     done: true,
+    endedAt: ctx.now,
     plays: s.plays + 1,
     summary: `${st.compat}% in tune · ${readLine(s, ctx, st)}`,
     highlights: [...s.highlights, ...notable(s, ctx, st)].slice(-6),

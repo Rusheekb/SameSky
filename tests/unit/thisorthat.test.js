@@ -174,6 +174,8 @@ test('full game: 10 rounds -> over with stats, summary, highlights; again keeps 
   assert.ok(h.s.highlights.some((x) => x.startsWith('Both picked: ')));
   assert.ok(h.s.highlights.some((x) => x.startsWith('Differed on: ')));
   for (const x of h.s.highlights) assert.ok(x.length <= 200);
+  assert.ok(![h.s.summary, ...h.s.highlights].some((x) => /[!💞⚡🎶]/u.test(x)), 'recap lines are plain: no exclamation marks or emoji');
+  assert.equal(h.s.endedAt, h.now, 'stamped with the time the play finished (the postmark on the results)');
   const first = h.s.items.map(key);
   // Ending is final: nothing but "again" changes it.
   const over = h.s;
@@ -188,6 +190,7 @@ test('full game: 10 rounds -> over with stats, summary, highlights; again keeps 
   assert.equal(h.s.gained, 0);
   assert.equal(h.s.rounds.length, 0);
   assert.equal(h.s.plays, 1);
+  assert.equal(h.s.endedAt, 0, 'a new play is not finished yet');
   const overlap = h.s.items.map(key).filter((k) => first.includes(k));
   assert.equal(overlap.length, 0, 'play again deals fresh dilemmas');
   playRound(h, ['b', 'b'], ['b', 'b']);

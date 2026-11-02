@@ -2,7 +2,7 @@
 //
 // The story starts with a title + opening line (built-in bank, or Claude via `story_start`).
 // Players take turns adding the next sentence (players[0] writes first). Either player can drop in
-// a "✨ Twist!" narrator line (max 3, never two in a row). After 6 player lines either can write
+// a "Twist" narrator line (max 3, never two in a row). After 6 player lines either can write
 // "The End"; at 24 lines the book is full and ends by itself. In the ending phase the narrator
 // (AI) can write the title + epilogue, or the two of you pick a title. The finished story is shown
 // as a keepsake page.
@@ -36,10 +36,9 @@ export const FALLBACK_TITLE = 'A Story for Two';
 export const meta = {
   id: 'story',
   title: 'Story Chain',
-  emoji: '📖',
-  tagline: 'Write a tiny story together, one line at a time.',
+  tagline: 'Write a tiny story together, one line at a time',
   description:
-    'Take turns adding the next sentence to a story that starts with a surprise opening. Throw in a ✨ twist when it gets too comfortable, then write “The End” together and keep the finished book.',
+    'Take turns adding the next sentence to a story that starts with a surprise opening. Throw in a twist when it gets too comfortable, then write “The End” together and keep the finished book.',
   minPlayers: 2,
   ai: { task: 'story_start', label: 'a story opening' },
 };
@@ -285,7 +284,7 @@ export function tick(s, ctx) {
 }
 
 /**
- * Recap entry when you leave through ✕ mid-story (core/state.js finishGame). A bound book already
+ * Recap entry when you leave through the close button mid-story (core/state.js finishGame). A bound book already
  * has its summary + highlight; a story in progress adds its title, line count and the most
  * memorable line so far on top of any stories finished earlier in this game.
  */
@@ -332,8 +331,15 @@ export function reconcileDraft(d, s, me) {
   return d;
 }
 
-/** Plain-text version of the story (for the AI `story` param and "Copy story"). */
-export function storyText(s, names = {}) {
+/** How a narrator twist reads in the plain text (the AI's story so far, and "Copy story"). */
+export const TWIST_PREFIX = 'Plot twist: ';
+
+/**
+ * Plain-text version of the story (for the AI `story` param and "Copy story"). Once the book is
+ * bound it reads like the keepsake page: title, byline, the story, epilogue, "The End", and the
+ * optional `stamp` line (the postmark the view writes under it).
+ */
+export function storyText(s, names = {}, stamp = '') {
   const parts = [s.opening];
   let para = [];
   const flush = () => {
@@ -343,14 +349,14 @@ export function storyText(s, names = {}) {
   for (const l of s.lines) {
     if (l.twist) {
       flush();
-      parts.push(`✨ ${l.text}`);
+      parts.push(`${TWIST_PREFIX}${l.text}`);
     } else para.push(l.text);
   }
   flush();
   if (!s.book) return parts.join('\n\n');
   const by = Object.values(names).filter(Boolean).join(' & ');
-  return [`📖 ${s.book.title}`, by ? `by ${by}` : '', '', ...parts.flatMap((p) => [p, '']), s.book.epilogue, '', '— The End —']
-    .filter((x, i, arr) => !(x === '' && arr[i - 1] === ''))
-    .join('\n')
-    .trim();
+  const head = by ? `${s.book.title}\nby ${by}` : s.book.title;
+  return [head, ...parts, s.book.epilogue, 'The End', typeof stamp === 'string' ? stamp.trim() : '']
+    .filter(Boolean)
+    .join('\n\n');
 }

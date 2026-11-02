@@ -1,167 +1,188 @@
-/* Duet Canvas. The shared .drawboard styles live in css/canvas.css. */
+/* ==========================================================================
+   Duet Canvas. The shared .drawboard styles live in css/canvas.css.
+   ========================================================================== */
 .game.duet {
-  gap: 14px;
-  /* Height of everything but the board: top bar, game header, prompt card, toolbar, the
-     "We're done!" row and the fixed reaction bar. Phones (two-row toolbar) keep their board
-     size: on a short phone the finish row may sit below the fold, which is why the prompt card
-     above the board carries the ready state and an "Agree" button. */
-  --duet-chrome: 410px;
+  gap: 16px;
+  /* Height of everything but the board: top bar, game header, prompt card, toolbar and the fixed
+     reaction bar. On a short phone the "We're done" row may sit below the fold, which is why the
+     prompt card above the board carries the ready state and "Agree". From 680px the tools stand
+     beside the board (css/canvas.css): the row is --tools-w wider and the finish row clears the bar. */
+  --duet-chrome: 380px;
+  --tools-w: 0px;
+  --board-w: min(640px, max(260px, calc((100dvh - var(--duet-chrome)) * 4 / 3)));
 }
 @media (min-width: 680px) {
-  /* One-row toolbar: shrink the board so the finish row clears the reaction bar on a laptop. */
   .game.duet {
-    --duet-chrome: 456px;
+    --duet-chrome: 408px;
+    --tools-w: 98px;
+  }
+  /* Done: no tools, and the framed sheet leaves room for its caption and the actions under it. */
+  .game.duet.is-done {
+    --duet-chrome: 520px;
+    --tools-w: 0px;
   }
 }
 .game.duet .duet-board,
 .game.duet .duet-prompt,
 .game.duet .duet-banner {
-  width: min(100%, 640px, max(260px, calc((100dvh - var(--duet-chrome)) * 4 / 3)));
+  width: min(100%, calc(var(--board-w) + var(--tools-w)));
   margin: 0 auto;
 }
 
+/* ---------- prompt card ---------- */
 .game.duet .duet-prompt {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 10px 12px 16px;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 12px;
   text-align: left;
-  font-size: 1.12rem;
-  line-height: 1.25;
+  font-size: 22px;
+  line-height: 1.2;
+  transition: border-color var(--t-mid) var(--ease);
 }
 .game.duet .prompt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
   min-width: 0;
 }
 .game.duet .prompt-text small {
-  display: block;
-  color: var(--muted);
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-weight: 800;
-  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--text-3);
   /* One line whatever it says, so the board never jumps when the ready state changes. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Partner tapped "We're done!": the card turns gold and offers "Agree" right there. */
-.game.duet .duet-prompt {
-  transition:
-    border-color 0.3s ease,
-    box-shadow 0.3s ease;
-}
-.game.duet .duet-prompt.partner-ready {
-  border-color: rgba(255, 212, 121, 0.75);
-  animation: duet-glow 1.6s ease-in-out infinite;
-}
-.game.duet .duet-prompt.partner-ready .ready-note,
-.game.duet .duet-prompt.me-ready .ready-note {
-  color: var(--gold);
-  letter-spacing: 0.06em;
-}
-/* Same footprint as the 🔀 it replaces. */
-.game.duet .duet-prompt .agree {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
-  padding: 0;
-  border-radius: 50%;
-  border: 0;
-  background: var(--gold);
-  color: #2a2148;
-  font-size: 1.3rem;
-  font-weight: 900;
-  box-shadow: 0 0 0 4px rgba(255, 212, 121, 0.3);
-}
 .game.duet .prompt-text span {
   display: block;
   overflow-wrap: anywhere;
 }
-.game.duet .shuffle {
+/* Partner tapped "We're done": a lamplight hairline and "Agree" right there. */
+.game.duet .duet-prompt.partner-ready {
+  border-color: var(--accent-line);
+}
+.game.duet .duet-prompt.partner-ready .ready-note {
+  color: var(--accent);
+}
+.game.duet .duet-prompt.me-ready .ready-note {
+  color: var(--text-2);
+}
+.game.duet .duet-prompt .agree,
+.game.duet .duet-prompt .shuffle {
   flex: none;
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  font-size: 1.2rem;
+  width: 40px;
+  min-height: 40px;
+  height: 40px;
 }
 
+/* ---------- finish row ---------- */
 .game.duet .duet-finish {
-  gap: 10px;
+  gap: 8px;
 }
 .game.duet .duet-finish p {
   margin: 0;
 }
 .game.duet .waiting-row {
-  gap: 10px;
+  gap: 12px;
 }
 .game.duet .waiting-row .lock-status {
   margin: 0;
 }
-.game.duet .glow-pulse {
-  animation: duet-glow 1.6s ease-in-out infinite;
-}
-@keyframes duet-glow {
-  50% {
-    box-shadow:
-      0 0 0 4px rgba(255, 212, 121, 0.45),
-      0 6px 26px rgba(255, 79, 154, 0.55);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .game.duet .glow-pulse,
-  .game.duet .duet-prompt.partner-ready {
-    animation: none;
-    box-shadow: 0 0 0 3px rgba(255, 212, 121, 0.45);
-  }
-}
 
-/* Finished: the canvas gets a little gallery frame. */
+/* ---------- done: the drawing becomes a sheet of paper with its caption and postmark ---------- */
+.game.duet .duet-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.game.duet .duet-banner h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 36px;
+  line-height: 1.05;
+  margin: 0;
+}
+.game.duet .duet-banner p {
+  margin: 0;
+  color: var(--text-2);
+}
+.game.duet .duet-banner .points {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+/* Radius 16 with 12 padding, so the drawing inside is 4. */
 .game.duet .duet-board.framed {
-  padding: 12px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #f2d49b, #c99a5b 55%, #e9c58a);
-  box-shadow:
-    inset 0 0 0 2px rgba(255, 255, 255, 0.35),
-    0 18px 40px rgba(0, 0, 0, 0.5);
-  animation: pop-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  padding: 12px 12px 0;
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  animation: rise var(--t-slow) var(--ease) both;
 }
 .game.duet .duet-board.framed .board-wrap {
   border-radius: 4px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  box-shadow: none;
 }
-.game.duet .duet-banner {
-  gap: 6px;
+.game.duet .duet-board.framed .board-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  border: 1px solid rgba(29, 27, 36, 0.12);
+  pointer-events: none;
 }
-.game.duet .duet-banner h2 {
-  margin: 0;
+.game.duet .sheet-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 4px 16px;
+  color: var(--paper-ink);
+  text-align: left;
 }
-.game.duet .pts-chip {
-  border-color: rgba(255, 212, 121, 0.6);
-  background: rgba(255, 212, 121, 0.16);
+.game.duet .sheet-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.game.duet .sheet-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--paper-ink-2);
+  overflow-wrap: anywhere;
+}
+.game.duet .sheet-meta .postmark {
+  color: inherit;
+  white-space: normal;
+}
+.game.duet .duet-after {
+  gap: 24px;
 }
 .game.duet .duet-gallery {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
 }
 .game.duet .duet-thumbs {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
 }
 .game.duet .duet-thumbs .thumb-btn {
   width: 88px;
 }
 .game.duet .duet-thumbs img {
   aspect-ratio: 4 / 3;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
 }

@@ -13,7 +13,7 @@ export const meta = {
   id: 'insync',
   title: 'In Sync',
   emoji: '🔮',
-  tagline: 'Say the same word at the same time.',
+  tagline: 'Say the same word at the same time',
   description:
     'You each secretly type a word that links the two on screen. Reveal together. If they differ, your two words become the next pair. Keep going until your minds meet.',
   minPlayers: 2,
@@ -58,6 +58,7 @@ function fresh(pool, ai, carry = { points: 0, summary: '', highlights: [], plays
     pool: rest,
     ai,
     done: false,
+    at: null, // authority time the play ended (stamped on the result as a postmark)
     plays: carry.plays,
     gained: 0, // points from the current play
     points: carry.points, // total across plays (what the recap adds up)
@@ -88,6 +89,7 @@ export function reduce(s, a, ctx) {
         rounds,
         phase: 'synced',
         done: true,
+        at: ctx.now ?? null,
         plays: s.plays + 1,
         gained,
         points: s.points + gained,
@@ -103,6 +105,7 @@ export function reduce(s, a, ctx) {
           ...s,
           phase: 'over',
           done: true,
+          at: ctx.now ?? null,
           plays: s.plays + 1,
           gained: 1,
           points: s.points + 1,
@@ -122,6 +125,7 @@ export function reduce(s, a, ctx) {
         ...s,
         phase: 'over',
         done: true,
+        at: ctx.now ?? null,
         plays: s.plays + 1,
         gained,
         points: s.points + gained,

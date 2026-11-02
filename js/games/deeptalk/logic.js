@@ -11,9 +11,9 @@ export const MAX_ANSWER = 280;
 const MAX_AI = 20;
 
 export const LEVELS = {
-  1: { name: 'Warm-up', emoji: '☕' },
-  2: { name: 'Closer', emoji: '🕯️' },
-  3: { name: 'Deep', emoji: '🌊' },
+  1: { name: 'Warm-up' },
+  2: { name: 'Closer' },
+  3: { name: 'Deep' },
 };
 const LEVEL_IDS = [1, 2, 3];
 const DEPTH = { 1: 'kept it light', 2: 'got closer', 3: 'went deep' };
@@ -21,8 +21,7 @@ const DEPTH = { 1: 'kept it light', 2: 'got closer', 3: 'went deep' };
 export const meta = {
   id: 'deeptalk',
   title: 'Heart to Heart',
-  emoji: '💌',
-  tagline: 'Cards to get closer.',
+  tagline: 'Cards to get closer',
   description:
     'A cosy deck of questions for your call. Flip a card, then talk it through or both write an answer and reveal together. Save the ones you love.',
   minPlayers: 2,
@@ -107,6 +106,7 @@ export function init(ctx, opts = {}) {
       recent: [], // last few shared card texts (recap fallback when nothing is saved)
       closing: '',
       done: false,
+      endedAt: 0, // authority time of "Finish" (stamped on the keepsake as a postmark)
       points: 0,
       summary: '',
       highlights: [],
@@ -136,16 +136,16 @@ function recap(s) {
   const n = s.count;
   const saved = s.favs.length;
   const summary = n
-    ? `Shared ${n} heart-to-heart card${n === 1 ? '' : 's'} and ${DEPTH[s.deepest] || 'opened up'}${saved ? ` · ${saved} saved ⭐` : ''}`
+    ? `Shared ${n} heart-to-heart card${n === 1 ? '' : 's'} and ${DEPTH[s.deepest] || 'opened up'}${saved ? ` · ${saved} saved` : ''}`
     : saved
-      ? `Saved ${saved} heart-to-heart card${saved === 1 ? '' : 's'} ⭐`
+      ? `Saved ${saved} heart-to-heart card${saved === 1 ? '' : 's'}`
       : 'Peeked at the Heart to Heart deck';
   const highlights = (saved ? s.favs.map((f) => f.text) : s.recent).slice(-6).map(short);
   return { summary, highlights };
 }
 
 function finish(s, ctx) {
-  return { ...s, phase: 'done', done: true, ...recap(s), closing: pick(CLOSINGS, ctx.random) };
+  return { ...s, phase: 'done', done: true, endedAt: ctx.now, ...recap(s), closing: pick(CLOSINGS, ctx.random) };
 }
 
 /**
