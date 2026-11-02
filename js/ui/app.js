@@ -30,6 +30,16 @@ export function App({ config }) {
     return () => removeEventListener('hashchange', on);
   }, []);
 
+  // A new screen always starts at the top (the profile form leaves you scrolled down otherwise).
+  const screenKey = !profile || editing ? 'profile' : route.name === 'room' ? `room:${route.code}` : 'home';
+  useEffect(() => {
+    try {
+      window.scrollTo(0, 0);
+    } catch {
+      /* ignore */
+    }
+  }, [screenKey]);
+
   const saveProfile = (p) => {
     storage.set('profile', { name: p.name, avatar: p.avatar, color: p.color });
     setProfile(loadProfile());

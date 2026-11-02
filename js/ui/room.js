@@ -152,6 +152,15 @@ export function Room({ code, profile, config, onProfileChange }) {
     }
   }
   const kept = keptRef.current;
+  // Starting or leaving a game (or your partner arriving) is a new screen: start at the top.
+  const view = !partner ? 'invite' : st?.game ? `game:${st.game.n}` : kept ? 'kept' : 'lobby';
+  useEffect(() => {
+    try {
+      window.scrollTo(0, 0);
+    } catch {
+      /* ignore */
+    }
+  }, [view]);
   const setKept = (v) => {
     keptRef.current = v;
     rerender((n) => n + 1);
