@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makePair, makeSession, FakeTime, memoryStorage } from '../helpers/sim.js';
 import { createMemoryHub } from '../../js/net/memory.js';
 import { isNewer, initialState, reduce, playerIds } from '../../js/core/state.js';
-import { GAMES } from '../../js/games/index.js';
+import { GAMES, GAME_ICONS } from '../../js/games/index.js';
 
 test('two players converge on one room with both of them in it', async () => {
   const { a, b } = await makePair();
@@ -194,7 +194,8 @@ test('every registered game can init and ignore junk actions without throwing', 
       mod.reduce(s, { ...junk, by: 'stranger' }, { ...ctx, by: 'stranger' });
     }
     if (mod.tick) mod.tick(s, { ...ctx, by: null, now: 10 ** 13 });
-    assert.ok(mod.meta.title && mod.meta.emoji && mod.meta.id === id);
+    assert.ok(mod.meta.title && mod.meta.id === id);
+    assert.ok(GAME_ICONS[id], `${id} has a line icon`);
   }
 });
 
@@ -353,7 +354,7 @@ test('hostile state from the network is sanitised before adoption', async () => 
   evil.history = [null, 5, { title: { x: 1 }, summary: 'ok', highlights: [1, 'hi'] }];
   b._onMessage({ t: 'state', from: 'ccc', room: 'TESTROOM', state: evil });
   assert.equal(b.state.term, 99);
-  assert.equal(b.state.players.bbb.color, '#ff7eb6');
+  assert.equal(b.state.players.bbb.color, '#f2b35c');
   assert.equal(b.state.history.length, 1);
   assert.equal(b.state.history[0].title, 'Game');
   assert.deepEqual(b.state.history[0].highlights, ['hi']);

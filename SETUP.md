@@ -27,7 +27,7 @@ That's it — open the link, create a room, send your partner the invite link.
 **Repo description:** on the repo home page click the ⚙️ next to *About*, paste the line below,
 and put `https://rusheekb.github.io/SameSky/` in *Website*:
 
-> 🌙 Same Sky: real-time mini-games for long-distance couples. Sync your minds, guess each
+> Same Sky: real-time mini-games for long-distance couples. Sync your minds, guess each
 > other's answers, doodle and write stories together, live on both phones.
 
 The app only uses relative paths, so it works under any repo name. If you ever rename the repo
@@ -119,7 +119,7 @@ meantime the game offers a "Try a direct connection instead" button.
    re-run **Deploy to GitHub Pages**.
 6. **In the game:** ⚙️ Settings → enter the AI passcode (once per device) and, optionally, a few
    lines "About us" (how you met, inside jokes — used to personalise questions). In the lobby,
-   tap **✨ AI on**. Games then start with freshly written content, Story Chain gets AI twists
+   tap **AI on**. Games then start with freshly written content, Story Chain gets AI twists
    and endings, and *Our night so far* can write you a little poem.
 
 **Cost:** each generation is one short request (roughly 1–3k tokens). With the default

@@ -63,9 +63,14 @@ export function confetti({ count = 22 } = {}) {
   }
 }
 
-/** Big pulsing heart in the middle of the screen ("thinking of you"). */
+const HEART_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/></svg>';
+
+/** A lamplight line heart in the middle of the screen ("thinking of you"), the same heart as the button. */
 export function heartPulse(label = '') {
-  const el = spawn('fx-heartpulse', '💗', {}, 2600);
+  const el = spawn('fx-heartpulse', '', {}, 2600);
+  el.innerHTML = HEART_SVG; // static markup, no user content
   if (label) {
     const cap = document.createElement('small');
     cap.textContent = label;

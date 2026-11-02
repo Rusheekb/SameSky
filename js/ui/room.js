@@ -299,7 +299,6 @@ function Lobby({ session, config, onRecap }) {
   const useAi = aiReady && st.settings.ai;
   const partnerId = session.partnerId();
   const partner = partnerId ? st.players[partnerId] : null;
-  const differentTz = partner?.tz && partner.tz !== session.me.tz;
 
   // Download every game's screen while you browse, so starting one works even on patchy data.
   useEffect(() => {
@@ -340,11 +339,9 @@ function Lobby({ session, config, onRecap }) {
         <p>${st.scores.games ? `Either of you can choose. ${st.scores.games} played tonight` : 'Either of you can choose. In Sync is a good first one'}</p>
       </div>
       <button class="score-pill" onClick=${onRecap} title="Our night so far" aria-label=${`${st.scores.together} together points, open our night so far`}>
-        <b>${st.scores.together}</b><small>together points</small>
+        <b class=${st.scores.together ? '' : 'is-zero'}>${st.scores.together}</b><small>together points</small>
       </button>
     </div>
-    ${differentTz &&
-    html`<div class="lobby-times" aria-label="Your local times"><${Postmark} me=${session.me} partner=${partner} /></div>`}
 
     <div class="lobby-controls">
       <div class="vibe-row" role="radiogroup" aria-label="Tonight's vibe">
@@ -498,7 +495,7 @@ function GameHost({ session, config, kept = null, onLeaveKept }) {
     leaveArmed: armed,
     confirmEnd: () => {
       if (game.s?.done || kept) end();
-      else twoTap(end, 'Tap ✕ again to leave this game');
+      else twoTap(end, 'Tap Leave to confirm');
     },
     fx,
     ai: {
@@ -591,7 +588,7 @@ function Settings({ session, config, onClose, onProfileChange }) {
             <label class="field"><span>About us <small class="muted">(optional — inside jokes, how you met, places you love; helps personalise questions)</small></span>
               <textarea class="input" rows="3" maxLength="500" value=${aboutUs} onInput=${(e) => setAboutUs(e.currentTarget.value)}></textarea></label>
           </fieldset>`
-        : html`<p class="muted small">AI-written prompts are off. SETUP.md in the repo explains how to switch them on.</p>`}
+        : html`<p class="muted small">AI-written prompts are off for this room</p>`}
 
       <div class="row gap wrap">
         <button class=${`btn btn-ghost btn-sm ${resetArmed ? 'armed' : ''}`} onClick=${() =>
@@ -657,6 +654,7 @@ function Recap({ session, config, code, onClose }) {
   return html`<div class="sheet-backdrop" onClick=${(e) => e.target === e.currentTarget && onClose()}>
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Our night so far" ref=${sheet} tabIndex="-1">
       <div class="row between"><h2>Our night so far</h2><button class="btn btn-ghost btn-sm btn-icon" onClick=${onClose} aria-label="Close"><${Icon} name="x" /></button></div>
+      <${Postmark} me=${session.me} partner=${session.partnerId() ? st.players[session.partnerId()] : null} prefix="Tonight," />
       <div class="score-big"><b>${st.scores.together}</b> together point${st.scores.together === 1 ? '' : 's'} · ${st.scores.games} game${st.scores.games === 1 ? '' : 's'}</div>
       ${st.history.length === 0
         ? html`<p class="muted">Nothing played yet. Pick a game and it shows up here.</p>`
@@ -665,7 +663,7 @@ function Recap({ session, config, code, onClose }) {
             .reverse()
             .map((h, i) => html`<li key=${i}><span><${Icon} name=${iconFor(h.id)} /></span><div class="grow"><div class="row between gap"><b>${h.title}</b><span class="pts">+${h.points}</span></div><small class="muted">${h.summary}</small></div></li>`)}</ul>`}
       ${poem?.poem &&
-      html`<div class="poem card"><h3>${poem.title}</h3>${poem.poem.split('\n').map((l, i) => html`<p key=${i}>${l}</p>`)}</div>`}
+      html`<div class="poem card"><h3>${poem.title}</h3>${poem.poem.split('\n').map((l, i) => html`<p key=${i}>${l}</p>`)}<${Postmark} me=${session.me} partner=${session.partnerId() ? st.players[session.partnerId()] : null} class="on-paper" /></div>`}
       ${aiOn && st.history.length > 0 &&
       html`<button class="btn btn-primary" onClick=${write} disabled=${busy}>${busy ? 'Writing…' : poem ? 'Write a new one' : 'Write us a short poem about tonight'}</button>`}
     </div>

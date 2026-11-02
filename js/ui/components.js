@@ -23,11 +23,18 @@ export function clockIn(tz, at = Date.now()) {
  * Same Sky's signature: both local times written like a postmark, "9:40 pm here · 11:40 am there".
  * Use it in the top bar and on results/keepsakes (pass `at` to stamp a moment in the past).
  */
-export function Postmark({ me, partner, at, class: cls = '' }) {
+export function postmarkText(me, partner, at) {
   const here = clockIn(me?.tz, at);
-  if (!here) return null;
+  if (!here) return '';
   const differs = partner?.tz && partner.tz !== me?.tz;
-  return html`<span class=${`postmark ${cls}`}>${differs ? `${here} here · ${clockIn(partner.tz, at)} there` : `${here} for you both`}</span>`;
+  return differs ? `${here} here · ${clockIn(partner.tz, at)} there` : `${here} for you both`;
+}
+
+/** `prefix` reads like a stamp: "Written 9:40 pm here · 11:40 am there". Pass class="on-paper" on paper. */
+export function Postmark({ me, partner, at, prefix = '', class: cls = '' }) {
+  const text = postmarkText(me, partner, at);
+  if (!text) return null;
+  return html`<span class=${`postmark ${cls}`}>${prefix ? `${prefix} ${text}` : text}</span>`;
 }
 
 export function Avatar({ player, size = 'md', online }) {
@@ -82,7 +89,7 @@ export function Timer({ api, endsAt, total }) {
   if (secs == null) return null;
   const pct = total ? Math.max(0, Math.min(100, ((secs * 1000) / total) * 100)) : 100;
   return html`<div class=${`timer ${secs <= 10 ? 'urgent' : ''}`} role="timer" aria-label=${`${secs} seconds left`}>
-    <span class="timer-bar" style=${`width:${pct}%`}></span><b>${secs}s</b>
+    <span class="timer-bar" style=${`--p:${(pct / 100).toFixed(3)}`}></span><b>${secs}s</b>
   </div>`;
 }
 

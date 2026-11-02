@@ -19,7 +19,7 @@ export function initialState(room) {
     game: null, // { id, s, startedAt, n }
     gameSeq: 0, // how many games have been started in this room (instance counter)
     scores: { together: 0, games: 0 },
-    history: [], // [{ id, title, emoji, summary, points, at }]
+    history: [], // [{ id, title, summary, highlights, points, at, by }] (the recap draws icons via iconFor(id))
   };
 }
 
@@ -36,7 +36,7 @@ export function sanitizePlayer(p, fallbackId) {
     id,
     name: cleanText(p?.name, 24) || 'Player',
     avatar: cleanText(p?.avatar, 8) || '🌙',
-    color: /^#[0-9a-fA-F]{6}$/.test(p?.color || '') ? p.color : '#ff7eb6',
+    color: /^#[0-9a-fA-F]{6}$/.test(p?.color || '') ? p.color : '#f2b35c',
     tz: cleanText(p?.tz, 64),
   };
 }
@@ -210,7 +210,6 @@ export function finishGame(state, ctx, by = null) {
   const entry = {
     id: state.game.id,
     title: mod?.meta.title || state.game.id,
-    emoji: mod?.meta.emoji || '',
     summary,
     highlights: raw.slice(0, 6).map((h) => cleanText(h, 200)).filter(Boolean),
     points,
@@ -262,7 +261,6 @@ export function sanitizeIncomingState(st, room) {
     .map((h) => ({
       id: str(h.id, 40),
       title: str(h.title, 60) || 'Game',
-      emoji: str(h.emoji, 8) || '🎲',
       summary: str(h.summary, 240),
       highlights: Array.isArray(h.highlights) ? h.highlights.filter((x) => typeof x === 'string').slice(0, 6).map((x) => cleanText(x, 200)) : [],
       points: Math.max(0, Math.min(1000, Math.round(num(h.points)))),
