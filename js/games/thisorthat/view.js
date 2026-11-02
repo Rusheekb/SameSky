@@ -49,11 +49,11 @@ function PickPhase({ s, api, item }) {
       <div class="card tot-locked pop-in">
         <p class="tot-locked-title"><${Icon} name="lock" size=${16} />Locked in</p>
         <dl class="tot-locked-rows">
-          <div class="tot-locked-row"><dt>You'd pick</dt><dd>${sideText(item, server.mine)}</dd></div>
+          <div class="tot-locked-row"><dt>You’d pick</dt><dd>${sideText(item, server.mine)}</dd></div>
           <div class="tot-locked-row"><dt>You think ${pName} picks</dt><dd>${sideText(item, server.guess)}</dd></div>
         </dl>
+        <p class="tot-waiting"><${WaitingDots} text=${`Waiting for ${pName} to choose`} /></p>
       </div>
-      <p class="muted tot-waiting"><${WaitingDots} text=${`Waiting for ${pName} to choose`} /></p>
       <${LockStatus} api=${api} locked=${lockedMap} labels=${LOCK_LABELS} />
     </div>`;
   }
@@ -63,7 +63,7 @@ function PickPhase({ s, api, item }) {
       ${partnerLocked ? `${pName} has locked in — your turn` : 'Tap yours, then guess theirs'}
     </p>
     <div class="tot-step">
-      <div class="tot-label"><${Avatar} player=${me} size="sm" /><b>You'd pick</b>${view.mine && html`<span class="tot-check"><${Icon} name="check" size=${16} label="chosen" /></span>`}</div>
+      <div class="tot-label"><${Avatar} player=${me} size="sm" /><b>You’d pick</b>${view.mine && html`<span class="tot-check"><${Icon} name="check" size=${16} label="chosen" /></span>`}</div>
       <${Options} item=${item} value=${view.mine} kind="mine" label="Your pick" onPick=${(k) => tap('mine', k)} />
     </div>
     <div class="tot-step">
@@ -105,18 +105,18 @@ function RevealPhase({ s, api, item }) {
       <h3 class="tot-headline">${r.same ? `You both chose ${myPick}` : 'You split on this one'}</h3>
       <ul class="tot-checks">
         <${Check} ok=${r.right[pid]} title=${r.right[pid] ? `${pName} read your mind` : `${pName} guessed wrong`}
-          detail=${`${pName} guessed you'd pick ${sideText(item, r.guess[pid])}`} />
-        <${Check} ok=${r.right[me.id]} title=${r.right[me.id] ? `You read ${pName}'s mind` : 'You guessed wrong'}
+          detail=${`${pName} guessed you’d pick ${sideText(item, r.guess[pid])}`} />
+        <${Check} ok=${r.right[me.id]} title=${r.right[me.id] ? `You read ${pName}’s mind` : 'You guessed wrong'}
           detail=${`You guessed ${sideText(item, r.guess[me.id])}`} />
       </ul>
       <p class="tot-gain">${r.gained
         ? html`<span class="points">+${r.gained}</span> together point${r.gained === 1 ? '' : 's'}`
         : 'No points this time — still cute'}</p>
+      <button class="btn btn-primary tot-next" onClick=${() => api.act({ type: 'next', round: s.round })}>
+        ${last ? 'See results' : 'Next dilemma'}<${Icon} name="arrow-right" />
+        ${secs != null && html`<span class="tot-count" aria-label=${`auto in ${secs} seconds`}>${secs}s</span>`}
+      </button>
     </div>
-    <button class="btn btn-primary btn-lg tot-next" onClick=${() => api.act({ type: 'next', round: s.round })}>
-      ${last ? 'See results' : 'Next dilemma'}<${Icon} name="arrow-right" />
-      ${secs != null && html`<span class="tot-count" aria-label=${`auto in ${secs} seconds`}>${secs}s</span>`}
-    </button>
   </div>`;
 }
 
@@ -128,7 +128,7 @@ function OverPhase({ s, api }) {
   const st = stats(s, api.players);
   const n = s.rounds.length;
   return html`<div class="stack center tot-over">
-    <section class="card tot-final pop-in" aria-label="Results">
+    <section class="result-banner win tot-final pop-in" aria-label="Results">
       <p class="tot-figure">${st.compat}%</p>
       <p class="tot-figure-label">in tune</p>
       <h2 class="tot-verdict">${verdict(st.compat)}</h2>
@@ -167,12 +167,8 @@ export default function ThisOrThatView({ s, api }) {
 
   useOnChange(s.phase === 'reveal' ? `${s.plays}:${s.rounds.length}` : 0, () => {
     if (!last) return;
-    if (last.gained === 3) {
-      api.effects.confetti();
-      api.effects.sound('success');
-    } else {
-      api.effects.sound('reveal');
-    }
+    // A perfect round gets the bright sound; paper slips are kept for the final results.
+    api.effects.sound(last.gained === 3 ? 'success' : 'reveal');
   });
   useOnChange(s.phase === 'over' ? s.plays : 0, () => {
     api.effects.sound('success');

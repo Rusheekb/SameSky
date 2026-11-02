@@ -20,7 +20,6 @@ const OPTION_SETS = 8; // 4 rounds + one reroll each
 export const meta = {
   id: 'doodle',
   title: 'Doodle Dash',
-  emoji: '🎨',
   tagline: 'Draw it, they guess it',
   description:
     'Take turns drawing a secret word live while the other guesses as fast as they can. Quicker guesses earn more together points. Four rounds, two each.',
@@ -148,11 +147,12 @@ function fresh(ctx, { aiWords = [], used = [] } = {}, carry = { points: 0, summa
     guessCount: 0,
     closeCount: 0,
     last: null, // latest round result
-    log: [], // [{ round, word, drawer, guesser, ok, how, secs, pts }]
+    log: [], // [{ round, word, drawer, guesser, ok, how, secs, pts, at }] (`at` = when the round ended)
     used: used.slice(-40),
     cid: cid(ctx.random), // prefix for the per-round drawing boards
     ai: aiWords.length >= 6,
     done: false,
+    endedAt: 0, // when the game ended, i.e. the final gallery opened (its postmark, and the collage)
     plays: carry.plays,
     gained: 0,
     points: carry.points,
@@ -187,7 +187,7 @@ function finishRound(s, ctx, { ok, how }) {
   const secs = Math.max(0, Math.min(DRAW_MS / 1000, Math.round((ctx.now - s.startedAt) / 1000)));
   const left = Math.max(0, Math.floor((s.endsAt - ctx.now) / 1000));
   const pts = ok ? 3 + Math.floor(left / 20) : 0;
-  const entry = { round: s.round, word: s.word, drawer: s.drawer, guesser: s.guesser, ok, how, secs, pts };
+  const entry = { round: s.round, word: s.word, drawer: s.drawer, guesser: s.guesser, ok, how, secs, pts, at: ctx.now };
   const log = [...s.log, entry];
   return {
     ...s,
@@ -204,7 +204,7 @@ function finishRound(s, ctx, { ok, how }) {
 
 function advance(s, ctx) {
   if (s.round >= s.rounds) {
-    return { ...s, phase: 'final', done: true, plays: s.plays + 1, nextAt: 0, summary: summaryOf(s.log, true) };
+    return { ...s, phase: 'final', done: true, endedAt: ctx.now, plays: s.plays + 1, nextAt: 0, summary: summaryOf(s.log, true) };
   }
   let pool = s.pool;
   if (!pool.length) pool = makeSets(ctx.random, ctx.settings?.vibe, [], s.used);

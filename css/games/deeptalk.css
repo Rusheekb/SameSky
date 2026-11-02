@@ -284,8 +284,8 @@
   gap: 12px;
 }
 .game.deeptalk .dt-counter {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   line-height: 16px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
@@ -398,8 +398,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   line-height: 16px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
@@ -409,8 +409,9 @@
   align-items: center;
   gap: 4px;
 }
-.game.deeptalk .btn-sm {
-  min-height: 40px;
+/* The ghost button keeps its hover surface, but its label ends on the column line. */
+.game.deeptalk .dt-foot > .btn-ghost {
+  margin-right: -12px;
 }
 .game.deeptalk .dt-sure {
   color: var(--text);
@@ -486,7 +487,7 @@
 .game.deeptalk .dt-fav {
   background: var(--ink-2);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   padding: 16px;
   animation: rise var(--t-slow) var(--ease) both;
 }

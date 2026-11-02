@@ -48,12 +48,42 @@ export function penColors(api) {
   return { [p1]: a, [p2]: b };
 }
 
-/** The postmark as plain text, for saved images: "9:40 pm here · 11:40 am there". */
-function postmarkText(api) {
-  const here = clockIn(api.me?.tz);
+/**
+ * A short phone (360x640, or a 390-wide phone once the browser's bars take their share): the
+ * header, a two-line prompt, the board and its toolbar fill the height above the reaction bar, so
+ * the finish row would sit under it. There the prompt card carries the finish controls too (as it
+ * already does "Agree") and the row below the board is left out. A wider phone has a taller board,
+ * hence the taller bands for wider screens.
+ */
+const COMPACT = [
+  '(max-width: 679px) and (max-height: 720px)',
+  '(min-width: 380px) and (max-width: 679px) and (max-height: 760px)',
+  '(min-width: 420px) and (max-width: 679px) and (max-height: 780px)',
+].join(', ');
+
+function useMedia(query) {
+  const read = () => !!globalThis.matchMedia?.(query).matches;
+  const [on, setOn] = useState(read);
+  useEffect(() => {
+    const m = globalThis.matchMedia?.(query);
+    if (!m) return undefined;
+    const update = () => setOn(m.matches);
+    update();
+    m.addEventListener?.('change', update);
+    return () => m.removeEventListener?.('change', update);
+  }, [query]);
+  return on;
+}
+
+/**
+ * The postmark as plain text, for saved images: "9:40 pm here · 11:40 am there". Stamped with
+ * `at` (when the canvas was framed, from the state) so the PNG matches the sheet on both phones.
+ */
+export function postmarkText(api, at) {
+  const here = clockIn(api.me?.tz, at || undefined);
   if (!here) return '';
   const tz = api.partner?.tz;
-  return tz && tz !== api.me?.tz ? `${here} here · ${clockIn(tz)} there` : `${here} for you both`;
+  return tz && tz !== api.me?.tz ? `${here} here · ${clockIn(tz, at || undefined)} there` : `${here} for you both`;
 }
 
 export default function DuetView({ s, api }) {
@@ -67,6 +97,7 @@ export default function DuetView({ s, api }) {
   const meReady = !!s.ready[meId];
   const partnerReady = !!(partner && s.ready[partner.id]);
   const pens = penColors(api);
+  const compact = useMedia(COMPACT);
 
   useEffect(() => pruneBoards(`${meId}:${s.cid}`), [s.cid]);
   useOnChange(done ? s.plays : 0, () => {
@@ -84,17 +115,37 @@ export default function DuetView({ s, api }) {
   // The ready state lives in the prompt card above the board, so it's seen without scrolling even
   // on a short phone where the finish row sits below the fold (or behind the reaction bar).
   const partnerWaiting = partnerReady && !meReady;
-  const label = partnerWaiting ? `${pName} thinks it's finished` : meReady ? `You're done, waiting for ${pName}` : 'Draw together';
+  const label = partnerWaiting
+    ? `${pName} thinks it’s finished`
+    : meReady
+      ? `You’re done, waiting for ${pName}`
+      : compact && ink
+        ? 'You both tap the check when it’s done'
+        : 'Draw together';
   const names = api.players.map((id) => api.player(id)?.name).join(' & ');
 
   const save = () =>
     handle.current?.savePNG({
       caption: s.prompt,
-      sub: [names, postmarkText(api)].filter(Boolean).join(' · '),
+      sub: [names, postmarkText(api, s.doneAt)].filter(Boolean).join(' · '),
       filename: `duet-${slug(s.prompt)}.png`,
     });
 
-  return html`<section class=${`game duet ${done ? 'is-done' : ''}`}>
+  // The prompt card's one control: Agree when the partner is done; on a short phone also
+  // "Keep drawing" / "We're done" (the finish row is left out there); otherwise a new prompt.
+  const control = partnerWaiting
+    ? html`<button class="btn btn-accent btn-icon agree" onClick=${() => setReady(true)} aria-label="Agree, it’s finished" title="Agree, it’s finished">
+        <${Icon} name="check" /></button>`
+    : compact && meReady
+      ? html`<button class="btn btn-ghost btn-icon keep" onClick=${() => setReady(false)} aria-label="Keep drawing" title="Keep drawing">
+          <${Icon} name="pencil" /></button>`
+      : compact && ink
+        ? html`<button class="btn btn-primary btn-icon finish" onClick=${() => setReady(true)} aria-label="We’re done" title="We’re done">
+            <${Icon} name="check" /></button>`
+        : html`<button class="btn btn-ghost btn-icon shuffle" onClick=${shuffle} aria-label="New prompt" title="New prompt">
+            <${Icon} name="shuffle" /></button>`;
+
+  return html`<section class=${`game duet ${done ? 'is-done' : ''} ${compact ? 'compact' : ''}`}>
     <${GameHeader} meta=${meta} api=${api}>${s.n > 1 && html`<span class="chip">Canvas ${s.n}</span>`}</${GameHeader}>
 
     ${done
@@ -107,11 +158,7 @@ export default function DuetView({ s, api }) {
             <small class="ready-note" aria-live="polite" title=${label}>${meReady && html`<${Icon} name="check" size=${14} />`}${label}</small>
             <span>${s.prompt}</span>
           </div>
-          ${partnerWaiting
-            ? html`<button class="btn btn-accent btn-icon agree" onClick=${() => setReady(true)} aria-label="Agree, it's finished" title="Agree, it's finished">
-                <${Icon} name="check" /></button>`
-            : html`<button class="btn btn-ghost btn-icon shuffle" onClick=${shuffle} aria-label="New prompt" title="New prompt">
-                <${Icon} name="shuffle" /></button>`}
+          ${control}
         </div>`}
 
     <div class=${`duet-board ${done ? 'framed' : ''}`}>
@@ -125,7 +172,7 @@ export default function DuetView({ s, api }) {
       ${done &&
       html`<div class="sheet-caption">
         <span class="sheet-title">${s.prompt}</span>
-        <span class="sheet-meta">${names}${' · '}<${Postmark} me=${api.me} partner=${api.partner} /></span>
+        <span class="sheet-meta">${names}${' · '}<${Postmark} me=${api.me} partner=${api.partner} at=${s.doneAt || undefined} /></span>
       </div>`}
     </div>
 
@@ -135,13 +182,14 @@ export default function DuetView({ s, api }) {
           <${Gallery} s=${s} api=${api} />
           <${ResultActions} api=${api} onAgain=${() => api.act({ type: 'again', n: s.n })} againLabel="New canvas" />
         </div>`
-      : html`<div class="stack center duet-finish">
+      : !compact &&
+        html`<div class="stack center duet-finish">
           ${meReady
             ? html`<div class="row center wrap waiting-row">
                   <${LockStatus} api=${api} locked=${s.ready} labels=${{ done: 'done', waiting: 'still drawing' }} />
                   <button class="btn" onClick=${() => setReady(false)}><${Icon} name="pencil" />Keep drawing</button>
                 </div>`
-            : html`<button class="btn btn-primary btn-lg" disabled=${!ink} onClick=${() => setReady(true)}>We're done</button>
+            : html`<button class="btn btn-primary btn-lg" disabled=${!ink} onClick=${() => setReady(true)}>We’re done</button>
                 <p class="muted small">${ink ? (partnerReady ? 'Tap to frame your masterpiece' : 'You both tap it when it’s finished') : 'Draw something first, any squiggle counts'}</p>`}
         </div>`}
   </section>`;
@@ -171,7 +219,7 @@ function Gallery({ s, api }) {
     <div class="duet-thumbs">
       ${items.map(
         (it) => html`<button key=${it.n} class="thumb-btn" title=${it.prompt} aria-label=${`Save “${it.prompt}”`}
-          onClick=${() => saveBoardPNG(it.board, { aspect: ASPECT, caption: it.prompt, sub: names, filename: `duet-${slug(it.prompt)}.png` })}>
+          onClick=${() => saveBoardPNG(it.board, { aspect: ASPECT, caption: it.prompt, sub: [names, it.at && postmarkText(api, it.at)].filter(Boolean).join(' · '), filename: `duet-${slug(it.prompt)}.png` })}>
           <img src=${it.src} alt=${it.prompt} /></button>`,
       )}
     </div>

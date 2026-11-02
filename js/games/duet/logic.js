@@ -13,7 +13,6 @@ const POOL_SIZE = 12;
 export const meta = {
   id: 'duet',
   title: 'Duet Canvas',
-  emoji: '🖌️',
   tagline: 'Draw together, live',
   description:
     'One canvas, two pens, zero rules. Draw the prompt together in real time and watch each other’s lines appear. Finish it together to frame your masterpiece.',
@@ -73,9 +72,10 @@ export function init(ctx, opts = {}) {
     ready: {}, // playerId -> true when they think it's finished
     shuffles: 0,
     startedAt: ctx.now,
-    finished: [], // [{ n, prompt, mins }] newest last
+    finished: [], // [{ n, prompt, mins, at }] newest last (`at` = when it was framed)
     ai: ai.length >= 3,
     done: false,
+    doneAt: 0, // when this canvas was framed (the postmark on the sheet and the saved PNG)
     plays: 0,
     points: 0,
     summary: '',
@@ -125,12 +125,13 @@ export function reduce(s, a, ctx) {
       else delete ready[a.by];
       if (!ctx.players.every((id) => ready[id])) return { ...s, ready };
       const mins = Math.max(1, Math.round((ctx.now - s.startedAt) / 60000));
-      const finished = [...s.finished, { n: s.n, prompt: s.prompt, mins }].slice(-12);
+      const finished = [...s.finished, { n: s.n, prompt: s.prompt, mins, at: ctx.now }].slice(-12);
       return {
         ...s,
         ready,
         phase: 'done',
         done: true,
+        doneAt: ctx.now,
         plays: s.plays + 1,
         finished,
         points: s.points + POINTS_PER_CANVAS,
@@ -140,7 +141,7 @@ export function reduce(s, a, ctx) {
     }
     case 'again': {
       if (s.phase !== 'done') return s;
-      return { ...s, ...nextPrompt(s, ctx), phase: 'draw', n: s.n + 1, ready: {}, startedAt: ctx.now, done: false };
+      return { ...s, ...nextPrompt(s, ctx), phase: 'draw', n: s.n + 1, ready: {}, startedAt: ctx.now, done: false, doneAt: 0 };
     }
     default:
       return s;

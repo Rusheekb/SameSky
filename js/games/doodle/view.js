@@ -8,12 +8,16 @@ const TAGS = ['Easy', 'Medium', 'Wildcard'];
 
 const coarse = () => !!globalThis.matchMedia?.('(pointer: coarse)').matches;
 
-/** The postmark as plain text, for saved images: "9:40 pm here · 11:40 am there". */
-function postmarkText(api) {
-  const here = clockIn(api.me?.tz);
+/**
+ * The postmark as plain text, for saved images: "9:40 pm here · 11:40 am there". Stamped with
+ * `at` (when the round or the game ended, from the state) so it matches <Postmark> on screen and
+ * on both phones, however long the keepsake sits there before it is saved.
+ */
+export function postmarkText(api, at) {
+  const here = clockIn(api.me?.tz, at || undefined);
   if (!here) return '';
   const tz = api.partner?.tz;
-  return tz && tz !== api.me?.tz ? `${here} here · ${clockIn(tz)} there` : `${here} for you both`;
+  return tz && tz !== api.me?.tz ? `${here} here · ${clockIn(tz, at || undefined)} there` : `${here} for you both`;
 }
 
 export default function DoodleView({ s, api }) {
@@ -27,18 +31,12 @@ export default function DoodleView({ s, api }) {
   useEffect(() => pruneBoards(`${meId}:${s.cid}`), [s.cid]);
 
   useOnChange(s.phase === 'draw' ? s.round : 0, () => api.effects.sound('whoosh'));
-  useOnChange(s.phase === 'result' ? s.log.length : 0, () => {
-    if (s.last?.ok) {
-      api.effects.confetti();
-      api.effects.sound('success');
-    } else {
-      api.effects.sound('fail');
-    }
-  });
+  // Per round only a sound; the confetti is kept for the final gallery (and only when something was guessed).
+  useOnChange(s.phase === 'result' ? s.log.length : 0, () => api.effects.sound(s.last?.ok ? 'success' : 'fail'));
   useOnChange(isDrawer && s.phase === 'draw' ? s.guessCount : 0, () => api.effects.sound('pop'));
   useOnChange(s.phase === 'draw' ? s.hintLevel : 0, () => api.effects.sound('reveal'));
   useOnChange(s.phase === 'final' ? s.plays : 0, () => {
-    api.effects.confetti();
+    if (s.log.slice(-ROUNDS).some((r) => r.ok)) api.effects.confetti();
     api.effects.sound('success');
   });
 
@@ -56,7 +54,7 @@ function Choose({ s, api, isDrawer, drawer, guesser }) {
     return html`<div class="card stack center waiting-card pop-in">
       <${Avatar} player=${drawer} size="lg" />
       <h3><${WaitingDots} text=${`${drawer?.name || 'Your partner'} is choosing a word`} /></h3>
-      <p class="muted">You're guessing this round. Guess as often as you like: the sooner you get it, the more points you both score.</p>
+      <p class="muted">You’re guessing this round. Guess as often as you like: the sooner you get it, the more points you both score.</p>
     </div>`;
   }
   return html`<div class="stack center choose">
@@ -126,7 +124,7 @@ function Round({ s, api, isDrawer, drawer, guesser, boardKey }) {
       canClear=${(id) => id === s.drawer}
       onCleared=${() => api.effects.toast(`${dName} started over`)}
       label=${`Drawing by ${isDrawer ? 'you' : dName}`}
-      emptyHint=${drawing ? (isDrawer ? 'Start drawing here' : `Waiting for ${dName}'s first line`) : ''}
+      emptyHint=${drawing ? (isDrawer ? 'Start drawing here' : `Waiting for ${dName}’s first line`) : ''}
       overlay=${closePop} />
 
     ${drawing && !isDrawer &&
@@ -138,7 +136,7 @@ function Round({ s, api, isDrawer, drawer, guesser, boardKey }) {
     ${drawing && html`<${Guesses} s=${s} isDrawer=${isDrawer} gName=${gName} action=${isDrawer && html`<${SkipButton} api=${api} round=${s.round} />`} />`}
     ${!drawing &&
     html`<${NextBar} s=${s} api=${api} onSave=${() =>
-      handle.current?.savePNG({ caption: s.last?.word || 'Doodle', sub: [`Drawn by ${dName}`, postmarkText(api)].filter(Boolean).join(' · '), filename: `doodle-${slug(s.last?.word)}.png` })} />`}
+      handle.current?.savePNG({ caption: s.last?.word || 'Doodle', sub: [`Drawn by ${dName}`, postmarkText(api, s.last?.at)].filter(Boolean).join(' · '), filename: `doodle-${slug(s.last?.word)}.png` })} />`}
   </div>`;
 }
 
@@ -160,7 +158,7 @@ function SkipButton({ api, round }) {
 function Guesses({ s, isDrawer, gName, action = null }) {
   const list = s.guesses;
   return html`<div class="guesses" aria-live="polite">
-    <div class="guesses-head"><span class="guesses-title">${isDrawer ? `${gName}'s guesses` : 'Your guesses'}</span>
+    <div class="guesses-head"><span class="guesses-title">${isDrawer ? `${gName}’s guesses` : 'Your guesses'}</span>
       <span class="guesses-tools">${s.guessCount > list.length && html`<span class="guess-count">${s.guessCount} so far</span>`}${action}</span></div>
     ${list.length
       ? html`<div class="bubbles">${list.map(
@@ -168,7 +166,7 @@ function Guesses({ s, isDrawer, gName, action = null }) {
             ${g.text}${g.close && html`<em>so close</em>`}</span>`,
         )}</div>`
       : html`<p class="muted small empty-guesses">${isDrawer
-          ? html`<${WaitingDots} text=${`Waiting for ${gName}'s first guess`} />`
+          ? html`<${WaitingDots} text=${`Waiting for ${gName}’s first guess`} />`
           : 'Wrong guesses are free, so fire away'}</p>`}
   </div>`;
 }
@@ -189,7 +187,7 @@ function NextBar({ s, api, onSave }) {
   const last = s.round >= s.rounds;
   const nextDrawer = api.player(s.guesser);
   return html`<div class="stack center next-bar">
-    <button class="btn btn-primary btn-lg" onClick=${() => api.act({ type: 'next', round: s.round })}>
+    <button class="btn btn-primary" onClick=${() => api.act({ type: 'next', round: s.round })}>
       ${last ? 'See our results' : 'Next round'}${secs != null && html`<span class="auto">${secs}s</span>`}</button>
     ${!last && html`<p class="muted small">${s.guesser === api.meId ? 'You draw next' : `${nextDrawer?.name || 'Your partner'} draws next`}</p>`}
     <button class="btn btn-ghost btn-sm" onClick=${onSave}><${Icon} name="download" size=${16} />Save this doodle</button>
@@ -224,14 +222,14 @@ function Final({ s, api }) {
       return;
     }
     const names = api.players.map((id) => api.player(id)?.name).join(' & ');
-    const sub = [`${s.gained} together points`, postmarkText(api), 'Same Sky'].filter(Boolean).join(' · ');
+    const sub = [`${s.gained} together points`, postmarkText(api, s.endedAt), 'Same Sky'].filter(Boolean).join(' · ');
     downloadCanvas(renderCollage(items, { aspect: ASPECT, title: `${names} · Doodle Dash`, sub }), 'our-doodles.png');
     api.effects.sound('tap');
   };
 
   return html`<div class="stack center final">
     <div class=${`result-banner pop-in final-banner ${ok.length ? 'win' : ''}`}>
-      <h2>That's a wrap</h2>
+      <h2>That’s a wrap</h2>
       <p class="big"><span class="points">${s.gained}</span> <small>together points</small></p>
       <p>${ok.length} of ${rounds.length} doodles guessed${ok.length === rounds.length ? ', a perfect night' : ''}</p>
       ${best && html`<p class="muted small">Fastest: “${best.word}” in ${best.secs}s, drawn by ${name(best.drawer, true)} and guessed by ${name(best.guesser, true)}</p>`}
@@ -246,7 +244,7 @@ function Final({ s, api }) {
                     saveBoardPNG(boards.current[i], {
                       aspect: ASPECT,
                       caption: r.word,
-                      sub: [`Drawn by ${api.player(r.drawer)?.name || ''}`, postmarkText(api)].filter(Boolean).join(' · '),
+                      sub: [`Drawn by ${api.player(r.drawer)?.name || ''}`, postmarkText(api, r.at || s.endedAt)].filter(Boolean).join(' · '),
                       filename: `doodle-${slug(r.word)}.png`,
                     })}>
                   <img src=${thumbs[i]} alt=${`Drawing of ${r.word}`} /></button>`
@@ -255,7 +253,7 @@ function Final({ s, api }) {
           </figure>`,
         )}
       </div>
-      <${Postmark} me=${api.me} partner=${api.partner} class="gallery-postmark" />
+      <${Postmark} me=${api.me} partner=${api.partner} at=${s.endedAt || undefined} class="gallery-postmark" />
     </div>
     <button class="btn" onClick=${saveAll}><${Icon} name="download" />Save our doodles</button>
     <${ResultActions} api=${api} onAgain=${() => api.act({ type: 'again', round: s.round })} againLabel="Play again" />

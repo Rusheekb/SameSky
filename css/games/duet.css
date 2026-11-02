@@ -4,12 +4,23 @@
 .game.duet {
   gap: 16px;
   /* Height of everything but the board: top bar, game header, prompt card, toolbar and the fixed
-     reaction bar. On a short phone the "We're done" row may sit below the fold, which is why the
-     prompt card above the board carries the ready state and "Agree". From 680px the tools stand
-     beside the board (css/canvas.css): the row is --tools-w wider and the finish row clears the bar. */
+     reaction bar. The prompt card above the board carries the ready state and "Agree"; on a short
+     phone (.compact, set by view.js) it carries "We're done" too and the finish row is left out.
+     From 680px the tools stand beside the board (css/canvas.css): the row is --tools-w wider and
+     the finish row clears the bar. */
   --duet-chrome: 380px;
   --tools-w: 0px;
   --board-w: min(640px, max(260px, calc((100dvh - var(--duet-chrome)) * 4 / 3)));
+}
+/* Short phone, 360x640: header, a two-line prompt (at 20px), the board and its toolbar fit above
+   the reaction bar with 8px to spare, and the board stays at least 326px wide so the eight tool
+   cells keep their 40px. */
+.game.duet.compact:not(.is-done) {
+  gap: 12px;
+  --duet-chrome: 396px;
+}
+.game.duet.compact .duet-prompt {
+  font-size: 20px;
 }
 @media (min-width: 680px) {
   .game.duet {
@@ -35,7 +46,6 @@
   align-items: center;
   gap: 12px;
   padding: 12px 12px 12px 16px;
-  border-radius: 12px;
   text-align: left;
   font-size: 22px;
   line-height: 1.2;
@@ -75,12 +85,8 @@
 .game.duet .duet-prompt.me-ready .ready-note {
   color: var(--text-2);
 }
-.game.duet .duet-prompt .agree,
-.game.duet .duet-prompt .shuffle {
+.game.duet .duet-prompt .btn-icon {
   flex: none;
-  width: 40px;
-  min-height: 40px;
-  height: 40px;
 }
 
 /* ---------- finish row ---------- */
@@ -123,13 +129,13 @@
 /* Radius 16 with 12 padding, so the drawing inside is 4. */
 .game.duet .duet-board.framed {
   padding: 12px 12px 0;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: var(--paper);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
   animation: rise var(--t-slow) var(--ease) both;
 }
 .game.duet .duet-board.framed .board-wrap {
-  border-radius: 4px;
+  border-radius: calc(var(--r-lg) - 12px);
   box-shadow: none;
 }
 .game.duet .duet-board.framed .board-wrap::after {
@@ -156,7 +162,8 @@
   overflow-wrap: anywhere;
 }
 .game.duet .sheet-meta {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 16px;
   color: var(--paper-ink-2);

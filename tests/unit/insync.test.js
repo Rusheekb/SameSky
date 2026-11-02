@@ -49,6 +49,8 @@ test('gives up after MAX_ROUNDS and "again" keeps the running total', () => {
   }
   assert.equal(h.s.phase, 'over');
   assert.equal(h.s.points, 1);
+  assert.match(h.s.summary, /^Didn’t sync in 10 rounds/, 'curly apostrophe, like the rest of the copy');
+  assert.ok(!/'/.test(h.s.summary));
   h.act('p2', { type: 'again' });
   assert.equal(h.s.phase, 'pick');
   assert.equal(h.s.points, 1);
@@ -105,4 +107,8 @@ test('summarize keeps a recap line when leaving mid-game', () => {
   const sum = insync.summarize(h.s, h.ctx());
   assert.match(sum.summary, /Stopped after 1 round/);
   assert.match(sum.highlights.at(-1), /alpha \/ omega/);
+});
+
+test('meta: no emoji field (the game icon comes from iconFor(id))', () => {
+  assert.equal('emoji' in insync.meta, false);
 });

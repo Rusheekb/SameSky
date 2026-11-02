@@ -36,18 +36,12 @@ export default function KnowMeView({ s, api }) {
     api.effects.sound('lock');
   };
 
-  // ---- little moments: sounds, and a few paper slips for a spot-on guess
+  // ---- little moments: sounds per round; paper slips are kept for the final screen
   useOnChange(s.phase === 'reveal' ? key : 0, () => {
     const sc = s.result?.score;
     api.effects.sound('reveal');
-    if (sc === 2) {
-      setTimeout(() => {
-        api.effects.confetti({ count: 14 });
-        api.effects.sound('success');
-      }, 550);
-    } else if (sc === 0) {
-      setTimeout(() => api.effects.sound('fail'), 550);
-    }
+    if (sc === 2) setTimeout(() => api.effects.sound('success'), 550);
+    else if (sc === 0) setTimeout(() => api.effects.sound('fail'), 550);
   });
   useOnChange(s.phase === 'judge' ? key : 0, () => api.effects.sound('reveal'));
   useOnChange(s.phase === 'answer' && partnerLocked ? qKey : 0, () => api.effects.sound('pop'));

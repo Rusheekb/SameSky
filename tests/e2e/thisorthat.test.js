@@ -87,7 +87,7 @@ test('This or That: pick, predict, reveal, auto-advance, results', { skip: !load
     await a.getByText('Blair read your mind', { exact: true }).waitFor();
     await a.getByText('You guessed wrong', { exact: true }).waitFor();
     await b.getByText('Alex guessed wrong', { exact: true }).waitFor();
-    await b.getByText("You read Alex's mind", { exact: true }).waitFor();
+    await b.getByText('You read Alex’s mind', { exact: true }).waitFor();
     await a.getByText('+2 together points').waitFor();
     await a.locator('.tot-count').waitFor();
     await settle(a, 900);

@@ -134,7 +134,7 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
     const prompt = await a.locator('.duet-prompt .prompt-text span').innerText();
     assert.ok(prompt.length > 3);
     await b.locator('.duet-prompt', { hasText: prompt }).waitFor();
-    assert.ok(await a.getByRole('button', { name: /We're done/ }).isDisabled(), 'nothing drawn yet');
+    assert.ok(await a.getByRole('button', { name: /We’re done/ }).isDisabled(), 'nothing drawn yet');
     await a.waitForTimeout(400);
     await t.shot(a, 'duet-start-a');
 
@@ -211,11 +211,28 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
       scribble(b, [0.55, 0.6], [0.85, 0.7], { steps: 16 }),
     ]);
     await waitInk(a, (n) => n > 30, { region: RIGHT });
+    // On a 390×844 phone the finish row clears the reaction bar.
+    {
+      const [cta, bar] = await Promise.all([a.getByRole('button', { name: /We’re done/ }).boundingBox(), a.locator('.reactions').boundingBox()]);
+      assert.ok(cta.y + cta.height <= bar.y, `"We’re done" (bottom ${cta.y + cta.height}) above the reaction bar (${bar.y}) at 390×844`);
+    }
+    // On a 360×640 phone it would sit under the bar, so the prompt card carries "We’re done"
+    // (a check) and the finish row is left out; the toolbar still clears the bar.
     await b.setViewportSize({ width: 360, height: 640 });
-    await a.getByRole('button', { name: /We're done/ }).click();
+    await b.locator('.game.duet.compact .duet-prompt .finish').waitFor();
+    await b.evaluate(() => scrollTo(0, 0));
+    {
+      const [cta, tools, bar] = await Promise.all(['.duet-prompt .finish', '.draw-tools', '.reactions'].map((sel) => b.locator(sel).boundingBox()));
+      assert.ok(cta.y >= 0 && cta.y + cta.height <= bar.y, `"We’re done" on screen at 360×640 (${cta.y}..${cta.y + cta.height}, bar at ${bar.y})`);
+      assert.ok(tools.y + tools.height <= bar.y, `toolbar (bottom ${tools.y + tools.height}) above the reaction bar (${bar.y})`);
+      assert.equal(await b.getByRole('button', { name: /We’re done/ }).count(), 1, 'one finish control, not two');
+      assert.equal(await b.locator('.duet-finish').count(), 0);
+    }
+    await t.shot(b, 'duet-compact-b-360x640');
+    await a.getByRole('button', { name: /We’re done/ }).click();
     // The partner sees it in the prompt card above the board (no scrolling needed on a 360×640
     // phone, where the finish row is below the fold) and can agree right there.
-    await b.locator('.duet-prompt.partner-ready', { hasText: 'Alex thinks it\'s finished' }).waitFor();
+    await b.locator('.duet-prompt.partner-ready', { hasText: 'Alex thinks it’s finished' }).waitFor();
     await b.evaluate(() => scrollTo(0, 0));
     {
       const [card, agree, bar] = await Promise.all(['.duet-prompt', '.duet-prompt .agree', '.reactions'].map((sel) => b.locator(sel).boundingBox()));
@@ -226,7 +243,7 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
     await b.waitForTimeout(500);
     await t.shot(b, 'duet-ready-b');
     await t.shot(a, 'duet-ready-a');
-    await b.getByRole('button', { name: "Agree, it's finished" }).click();
+    await b.getByRole('button', { name: "Agree, it’s finished" }).click();
     await a.locator('.duet-banner', { hasText: 'Masterpiece' }).waitFor();
     await b.locator('.duet-banner', { hasText: 'Masterpiece' }).waitFor();
     assert.equal(await a.locator('.draw-tools').count(), 0, 'tools hidden on the framed view');
@@ -249,8 +266,9 @@ test('Duet Canvas: both draw at once, undo/clear/resync, finish together and fra
     await waitInk(b, (n) => n > 30, { what: 'canvas 2 stroke on B' });
     await a.waitForTimeout(300);
     await t.shot(a, 'duet-draw-a-360');
-    await a.getByRole('button', { name: /We're done/ }).click();
-    await b.getByRole('button', { name: /We're done/ }).click();
+    await a.getByRole('button', { name: /We’re done/ }).click();
+    // Blair (still on the 360×640 phone) agrees from the prompt card.
+    await b.getByRole('button', { name: 'Agree, it’s finished' }).click();
     await a.locator('.duet-banner', { hasText: 'Masterpiece' }).waitFor();
     await a.locator('.duet-thumbs img').first().waitFor();
     await a.waitForTimeout(1500);
@@ -273,8 +291,8 @@ test('Duet Canvas: lost stroke, undo and clear messages heal by themselves; no r
     await a.waitForTimeout(800); // mount-time syncs done
     // The finish row clears the fixed reaction bar on a laptop.
     for (const p of [a, b]) {
-      const [cta, bar] = await Promise.all([p.getByRole('button', { name: /We're done/ }).boundingBox(), p.locator('.reactions').boundingBox()]);
-      assert.ok(cta.y + cta.height <= bar.y, `"We're done" (bottom ${cta.y + cta.height}) above the reaction bar (${bar.y})`);
+      const [cta, bar] = await Promise.all([p.getByRole('button', { name: /We’re done/ }).boundingBox(), p.locator('.reactions').boundingBox()]);
+      assert.ok(cta.y + cta.height <= bar.y, `"We’re done" (bottom ${cta.y + cta.height}) above the reaction bar (${bar.y})`);
     }
     await installLossyNet(a);
     await installLossyNet(b);

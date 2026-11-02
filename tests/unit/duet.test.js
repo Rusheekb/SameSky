@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as duet from '../../js/games/duet/logic.js';
+import { postmarkText } from '../../js/games/duet/view.js';
 import { PROMPTS, ALL_PROMPTS } from '../../js/content/duet.js';
 import { normalizeWord } from '../../js/lib/util.js';
 import { gameHarness } from '../helpers/sim.js';
@@ -169,4 +170,32 @@ test('prompt bank: 45+ unique prompts across every vibe', () => {
   assert.equal(new Set(norm).size, norm.length);
   for (const v of ['sweet', 'silly', 'flirty', 'deep']) assert.ok(PROMPTS[v].length >= 10, v);
   for (const p of ALL_PROMPTS) assert.ok(p.length <= duet.PROMPT_MAX, p);
+});
+
+test('the framed canvas is stamped with the moment it was finished; the postmark text uses that stamp', () => {
+  const h = gameHarness(duet); // starts at 2023-11-14 22:13:20 UTC
+  assert.equal(h.s.doneAt, 0);
+  h.act('p1', { type: 'ready', on: true });
+  h.now += 60_000;
+  h.act('p2', { type: 'ready', on: true });
+  assert.equal(h.s.phase, 'done');
+  const at = h.now; // 22:14:20 UTC
+  assert.equal(h.s.doneAt, at, 'stamped with the authority time');
+  assert.equal(h.s.finished.at(-1).at, at, 'earlier canvases keep their stamp for the gallery PNGs');
+  const done = h.s;
+  h.now += 3 * 60 * 60_000; // the sheet sits on screen for hours: the stamp does not move
+  assert.equal(h.act('p1', { type: 'ready', on: true }), done);
+  assert.equal(h.s.doneAt, at);
+
+  const api = { me: { tz: 'UTC' }, partner: { tz: 'Asia/Tokyo' } };
+  assert.equal(postmarkText(api, h.s.doneAt), '10:14 pm here · 7:14 am there');
+  assert.equal(postmarkText({ me: { tz: 'UTC' }, partner: { tz: 'UTC' } }, h.s.doneAt), '10:14 pm for you both');
+
+  h.act('p2', { type: 'again', n: h.s.n });
+  assert.equal(h.s.phase, 'draw');
+  assert.equal(h.s.doneAt, 0, 'a new canvas has no stamp yet');
+});
+
+test('meta: no emoji field (the game icon comes from iconFor(id))', () => {
+  assert.equal('emoji' in duet.meta, false);
 });

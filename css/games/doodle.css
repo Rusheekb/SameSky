@@ -88,7 +88,7 @@
   gap: 12px;
   min-height: 72px;
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: var(--ink-2);
   border: 1px solid var(--line);
 }
@@ -141,13 +141,14 @@
   width: 80px;
 }
 
-/* "So close" sits on the paper while the round is drawn: a small note in paper ink. */
+/* "So close" sits on the paper while the round is drawn: a small note in paper ink. Inset 8 on the
+   16px sheet, so its radius is 8 (a long note runs into the sheet's corners). */
 .game.doodle .close-pop {
   /* Centred without transforms: .pop-in animates `transform`. */
   position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
+  top: 8px;
+  left: 8px;
+  right: 8px;
   margin: 0 auto;
   z-index: 3;
   width: fit-content;
@@ -170,7 +171,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: var(--ink-2);
   border: 1px solid var(--line);
 }
@@ -179,7 +180,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 36px;
+  /* The drawer's Skip (a 40px .btn-sm) sits here; the guesser's header is as tall. */
+  min-height: 40px;
 }
 .game.doodle .guesses-title {
   font-size: 14px;
@@ -193,7 +195,8 @@
   flex: none;
 }
 .game.doodle .guess-count {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
@@ -230,10 +233,6 @@
 .game.doodle .empty-guesses {
   margin: 0;
 }
-.game.doodle .skip-btn {
-  min-height: 36px;
-  font-size: 14px;
-}
 .game.doodle .round > .answer-box {
   max-width: none;
 }
@@ -264,13 +263,16 @@
 .game.doodle .next-bar p {
   margin: 0;
 }
-/* Auto-advance countdown inside the primary button: quiet mono, not a pill. */
+/* Auto-advance countdown inside the primary button: quiet mono, not a pill. A solid grey ink, not
+   opacity, so it holds about 7:1 on the off-white button. */
 .game.doodle .next-bar .auto {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 13px;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
-  opacity: 0.55;
+  color: #4b5160;
+  opacity: 1;
 }
 
 /* ---------- final ---------- */
@@ -336,7 +338,8 @@
   white-space: nowrap;
 }
 .game.doodle .gallery-item figcaption small {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 16px;
   color: var(--text-3);

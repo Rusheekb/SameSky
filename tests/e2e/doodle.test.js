@@ -214,8 +214,8 @@ test('Doodle Dash: live drawing, guesses, a correct answer, four rounds and the 
     await a.getByRole('button', { name: 'See our results' }).click();
 
     // ---- final: totals + gallery of all four rounds
-    await a.getByText("That's a wrap").waitFor();
-    await b.getByText("That's a wrap").waitFor();
+    await a.getByText('That’s a wrap').waitFor();
+    await b.getByText('That’s a wrap').waitFor();
     await a.locator('.gallery-item img').nth(3).waitFor();
     await b.locator('.gallery-item img').nth(3).waitFor();
     assert.equal(await a.locator('.gallery-item').count(), 4);

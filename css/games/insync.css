@@ -88,10 +88,6 @@
 .game.insync .is-slot > .reveal-card {
   justify-content: center;
   min-height: 112px;
-  /* A contact shadow with negative spread, so it never darkens the neighbouring card. */
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.25),
-    0 16px 24px -12px rgba(0, 0, 0, 0.6);
 }
 /* Same word: the cards meet once they have turned over. */
 .game.insync .is-synced .is-slot:first-child {
@@ -209,7 +205,8 @@
   line-height: 20px;
 }
 .game.insync .is-n {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;

@@ -12,7 +12,6 @@ export const MAX_ROUNDS = 10;
 export const meta = {
   id: 'insync',
   title: 'In Sync',
-  emoji: '🔮',
   tagline: 'Say the same word at the same time',
   description:
     'You each secretly type a word that links the two on screen. Reveal together. If they differ, your two words become the next pair. Keep going until your minds meet.',
@@ -109,7 +108,7 @@ export function reduce(s, a, ctx) {
           plays: s.plays + 1,
           gained: 1,
           points: s.points + 1,
-          summary: `Didn't sync in ${MAX_ROUNDS} rounds (started from ${s.seed.join(' + ')})`,
+          summary: `Didn’t sync in ${MAX_ROUNDS} rounds (started from ${s.seed.join(' + ')})`,
           highlights: [
             ...s.highlights,
             `${s.seed.join(' + ')} → ${s.rounds.map((r) => ctx.players.map((id) => r.words[id]).join(' / ')).join(' → ')}`,

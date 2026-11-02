@@ -79,7 +79,7 @@ function WriteBox({ s, api }) {
   };
   return html`<form class="dt-write" onSubmit=${submit}>
     <textarea class="input" ref=${ref} rows="4" maxLength=${MAX_ANSWER} value=${text} aria-label="Your answer"
-      placeholder=${`Write from the heart. ${api.partner?.name || 'They'} won't see it until you both seal yours.`}
+      placeholder=${`Write from the heart. ${api.partner?.name || 'They'} won’t see it until you both seal yours.`}
       onInput=${(e) => {
         setText(e.currentTarget.value);
         const t = Date.now();
@@ -208,7 +208,7 @@ function Toolbar({ s, api }) {
         ${s.outcome ? (last ? 'Finish' : html`Next card<${Icon} name="arrow-right" />`) : html`Skip<${Icon} name="arrow-right" />`}
       </button>
     </div>`}
-    ${last && s.outcome && html`<p class="dt-note">That's ${MAX_CARDS} cards — what a night</p>`}
+    ${last && s.outcome && html`<p class="dt-note">That’s ${MAX_CARDS} cards — what a night</p>`}
     <div class="dt-foot">
       <span class="dt-counts">
         <span><${Icon} name="bookmark" size=${14} />${s.favs.length} saved</span>
@@ -237,7 +237,7 @@ function CardPhase({ s, api }) {
 
 function DonePhase({ s, api }) {
   return html`<div class="stack center dt-end">
-    <section class="dt-final pop-in" aria-label="Tonight's cards">
+    <section class="dt-final pop-in" aria-label="Tonight’s cards">
       <${Seal} />
       <p class="dt-closing">${s.closing}</p>
       <p class="dt-final-num"><b>${s.count}</b> card${s.count === 1 ? '' : 's'} shared${s.points > 0 ? html`<span class="dt-final-pts"> · +${s.points} together point${s.points === 1 ? '' : 's'}</span>` : ''}</p>

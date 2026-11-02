@@ -138,8 +138,8 @@
   border: 1px solid var(--line);
   background: var(--ink-3);
   color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 15px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -224,7 +224,8 @@
   color: var(--text-3);
 }
 .game.knowme .km-skip-left {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   font-weight: 400;
   color: var(--text-3);
@@ -420,8 +421,8 @@
   animation: km-pin-down var(--t-slow) var(--ease) 480ms both;
 }
 .game.knowme .km-pin b {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   line-height: 16px;
   font-weight: 500;
   color: var(--text-2);
@@ -481,11 +482,12 @@
   margin-bottom: 4px;
 }
 .game.knowme .km-j small {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   line-height: 16px;
   font-weight: 400;
   color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 .game.knowme .km-wait {
   width: 100%;
@@ -516,7 +518,7 @@
   line-height: 22px;
 }
 .game.knowme .km-result .btn {
-  min-width: 200px;
+  min-width: 176px;
   margin-top: 8px;
 }
 

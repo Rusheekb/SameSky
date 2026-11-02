@@ -15,10 +15,10 @@
   font-weight: 500;
 }
 
-/* Header: lines written, as quiet mono text. */
+/* Header: lines written, as quiet text set like the other header counts (UI face, tabular). */
 .game.story .sc-count {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   line-height: 16px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
@@ -76,7 +76,8 @@
 }
 .game.story .sc-page .sc-kicker {
   margin: 0 0 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 16px;
   color: var(--paper-ink-2);
@@ -231,7 +232,8 @@
   padding: 8px 12px;
   border: 1px solid rgba(29, 27, 36, 0.28);
   border-radius: var(--r-xs);
-  font-family: var(--font-mono);
+  font-family: var(--font-ui); /* Geist Mono slashes its zero; digits read warmer in the UI face */
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 16px;
   text-align: center;
@@ -313,10 +315,6 @@
   line-height: 20px;
   color: var(--text-3);
 }
-.game.story .sc-left.sc-count {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
 .game.story .sc-left.near {
   color: var(--accent);
 }
@@ -360,8 +358,8 @@
   color: var(--text-2);
 }
 .game.story .sc-uses {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
   font-weight: 400;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;

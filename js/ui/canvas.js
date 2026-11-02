@@ -777,7 +777,7 @@ export function renderCollage(items, { aspect = 0.75, cols = 2, cell = 600, bg =
     img.height = ch;
     paintBoard(img.getContext('2d'), it.board, cell, ch, bg);
     ctx.save();
-    roundRect(ctx, x, y, cell, ch, 12);
+    roundRect(ctx, x, y, cell, ch, 16); // the on-screen sheet radius (--r-lg)
     ctx.clip();
     ctx.drawImage(img, x, y);
     ctx.restore();
@@ -1387,7 +1387,7 @@ export function DrawingBoard(props) {
           onClick=${() => setEraser(!eraser)}><${Icon} name="eraser" /></button>
         ${mirrorTool &&
         html`<button type="button" class=${`tool ${mirror ? 'sel' : ''}`} aria-pressed=${mirror} aria-label="Mirror mode" title="Mirror mode"
-          onClick=${() => setMirror(!mirror)}><${MirrorIcon} /></button>`}
+          onClick=${() => setMirror(!mirror)}><${Icon} name="flip-vertical-2" /></button>`}
         <span class="tool-gap" aria-hidden="true"></span>
         <button type="button" class="tool" aria-label="Undo" title="Undo my last line" disabled=${!counts.mine} onClick=${undo}>
           <${Icon} name="undo-2" /></button>
@@ -1398,17 +1398,4 @@ export function DrawingBoard(props) {
       </div>
     </div>`}
   </div>`;
-}
-
-/**
- * lucide "flip-vertical-2" (a mirror axis with a shape on each side), drawn like <Icon>: 18px,
- * 1.5 stroke, currentColor. Not in js/ui/icons.js yet; swap for <Icon name="flip-vertical-2" /> once it is.
- */
-function MirrorIcon() {
-  return html`<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <path d="M12 14v2" /><path d="M12 20v2" /><path d="M12 2v2" /><path d="M12 8v2" />
-    <path d="M20.288 16.703A1 1 0 0 0 22 16V8a1 1 0 0 0-1.712-.703l-3.99 3.991a1 1 0 0 0-.001 1.424z" />
-    <path d="M3.712 16.703A1 1 0 0 1 2 16V8a1 1 0 0 1 1.712-.703l3.99 3.991a1 1 0 0 1 .001 1.424z" />
-  </svg>`;
 }

@@ -15,7 +15,8 @@ js/games/<id>/logic.js   PURE game rules (runs in Node tests and on the authorit
 js/games/<id>/view.js    Preact component (browser only)
 js/content/<id>.js    built-in prompt banks
 js/lib/ai.js          client for the optional Supabase Edge Function (Claude)
-js/ui/*.js            app shell, room screen, shared components, fx (confetti, floating emoji)
+js/ui/*.js            app shell, room screen, shared components (incl. Postmark), icons.js (lucide line
+                      icons), scene.js (the night scene), fx (paper confetti, floating reactions)
 css/app.css           design system; css/games/<id>.css per-game styles
 supabase/functions/same-sky-ai/   Edge Function that holds the Anthropic key
 tests/unit/           node:test unit tests            → npm test
@@ -49,6 +50,19 @@ reactions, "typing…" hints) goes through **fx** messages instead of state. Dra
 themselves: every 3 s each board sends a small digest of its finished strokes and the partner
 asks for exactly what it's missing (`js/ui/canvas.js` documents the protocol).
 
+## Design system
+
+The look comes from an [unslop](https://github.com/heydamir/unslop) pass (CC BY 4.0, Damir Sokolovsky).
+Tokens and shared components live in `css/app.css`; its header states the direction. In short:
+quiet ink surfaces (`--ink-0..4`, hairlines `--line`), three text roles (`--text`, `--text-2`,
+`--text-3`), one lamplight accent (`--accent`) used rarely, paper (`--paper*`) only inside the
+moments (reveal cards, letters, the story page, drawing boards), Instrument Sans for the interface,
+Instrument Serif for large headlines and revealed words, tabular digits for numbers, the 4px grid,
+radii by size (`--r-xs..--r-xl`), one easing curve (`--ease`). Icons are lucide line icons via
+`<Icon name="…">` (js/ui/icons.js) — emoji appear only as content: reactions, avatars, typed
+answers. Each game's line icon is in `GAME_ICONS` (js/games/index.js). Results and keepsakes carry
+the `<Postmark>` signature (both local times). No exclamation marks or uppercase labels in copy.
+
 ## Writing a game
 
 A game is two files plus optional content and CSS. Copy `js/games/insync/` as a template.
@@ -59,7 +73,6 @@ A game is two files plus optional content and CSS. Copy `js/games/insync/` as a 
 export const meta = {
   id: 'mygame',              // must match the folder + registry key
   title: 'My Game',
-  emoji: '🎲',
   tagline: 'One short line for the lobby card.',
   description: 'A sentence or two of rules.',
   minPlayers: 2,

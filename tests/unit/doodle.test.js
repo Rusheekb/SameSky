@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as doodle from '../../js/games/doodle/logic.js';
+import { postmarkText } from '../../js/games/doodle/view.js';
 import { ALL_WORDS, EASY, MEDIUM, US, SILLY } from '../../js/content/doodle.js';
 import { normalizeWord } from '../../js/lib/util.js';
 import { gameHarness } from '../helpers/sim.js';
@@ -310,4 +311,41 @@ test('actions tagged with an earlier round are ignored (late delivery, or both t
   // Untagged actions still work as before.
   h.act('p1', { type: 'skip' });
   assert.equal(h.s.phase, 'result');
+});
+
+test('the final gallery is stamped with the moment the game ended; each round with when it ended', () => {
+  const h = gameHarness(doodle); // starts at 2023-11-14 22:13:20 UTC
+  assert.equal(h.s.endedAt, 0);
+  const ends = [];
+  for (let r = 1; r <= ROUNDS; r++) {
+    const word = pick(h, 0);
+    h.now += 30_000;
+    h.act(h.s.guesser, { type: 'guess', text: word });
+    assert.equal(h.s.last.at, h.now, 'the round result carries its own stamp (the per-round PNG)');
+    ends.push(h.now);
+    assert.equal(h.s.endedAt, 0, 'no game stamp before the final');
+    h.now += 2_000;
+    h.act('p1', { type: 'next' });
+  }
+  assert.equal(h.s.phase, 'final');
+  const at = h.now;
+  assert.equal(h.s.endedAt, at, 'stamped with the authority time');
+  assert.deepEqual(h.s.log.map((r) => r.at), ends);
+  const fin = h.s;
+  h.now += 3 * 60 * 60_000; // the gallery sits on screen for hours: the stamp does not move
+  assert.equal(h.tick(), fin);
+  assert.equal(h.s.endedAt, at);
+
+  const api = { me: { tz: 'UTC' }, partner: { tz: 'America/New_York' } };
+  const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(new Date(at)).toLowerCase();
+  assert.match(postmarkText(api, h.s.endedAt), new RegExp(`^${clock} here · \\d{1,2}:\\d{2} pm there$`));
+  assert.equal(postmarkText(api, Date.UTC(2026, 10, 2, 21, 40)), '9:40 pm here · 4:40 pm there');
+  assert.equal(postmarkText({ me: { tz: 'UTC' } }, Date.UTC(2026, 10, 2, 21, 40)), '9:40 pm for you both');
+
+  h.act('p2', { type: 'again' });
+  assert.equal(h.s.endedAt, 0, 'a new game has no stamp yet');
+});
+
+test('meta: no emoji field (the game icon comes from iconFor(id))', () => {
+  assert.equal('emoji' in doodle.meta, false);
 });
