@@ -12,6 +12,18 @@ export const GAME_LIST = [insync, knowme, thisorthat, doodle, duet, deeptalk, st
 
 export const GAMES = new Map(GAME_LIST.map((m) => [m.meta.id, m]));
 
+/** Line icon (js/ui/icons.js) for each game: used on lobby cards, game headers and the recap. */
+export const GAME_ICONS = {
+  insync: 'orbit',
+  knowme: 'message-circle-question',
+  thisorthat: 'split',
+  doodle: 'pencil',
+  duet: 'brush',
+  deeptalk: 'messages-square',
+  story: 'book-open',
+};
+export const iconFor = (id) => GAME_ICONS[id] || 'dice-5';
+
 const VIEWS = {
   insync: () => import('./insync/view.js'),
   knowme: () => import('./knowme/view.js'),

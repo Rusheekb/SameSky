@@ -8,13 +8,14 @@ import { storage } from '../lib/storage.js';
 import { formatCode } from '../lib/util.js';
 import { aiConfigured, aiGenerate, getPasscode, setPasscode, AiError } from '../lib/ai.js';
 import { play, isMuted, setMuted } from '../lib/sound.js';
-import { confetti, floatEmoji, heartPulse, toast } from './fx.js';
-import { GAMES, GAME_LIST, loadView } from '../games/index.js';
-import { Avatar } from './components.js';
+import { confetti, floatEmoji, heartPulse, toast, hideToast } from './fx.js';
+import { GAMES, GAME_LIST, loadView, iconFor } from '../games/index.js';
+import { Avatar, Icon, Postmark, clockIn } from './components.js';
+import { NightScene, MoonMark } from './scene.js';
 import { rememberRoom, AVATARS, COLORS } from './profile.js';
 
 const REACTIONS = ['❤️', '😘', '😂', '🥺', '🔥', '👏'];
-const VIBE_LABELS = { sweet: '🍯 Sweet', flirty: '😏 Flirty', silly: '🤪 Silly', deep: '🌊 Deep' };
+const VIBE_LABELS = { sweet: 'Sweet', flirty: 'Flirty', silly: 'Silly', deep: 'Deep' };
 
 function useSession(code, profile, config) {
   const [session, setSession] = useState(null);
@@ -163,11 +164,11 @@ export function Room({ code, profile, config, onProfileChange }) {
   });
 
   if (!session) {
-    return html`<main class="screen center"><div class="loader">🌙</div><p class="muted">Opening your room…</p></main>`;
+    return html`<main class="screen center stack"><div class="loader" role="status" aria-label="Opening your room"></div><p class="muted">Opening your room</p></main>`;
   }
   if (session.full && !st.players[session.id]) {
     return html`<main class="screen narrow center stack">
-      <h2>This room is taken 🔒</h2>
+      <h2 class="display">This room is taken</h2>
       <p class="muted">Room ${formatCode(code)} already has two people in it. Ask for a fresh link, or create your own room.</p>
       <a class="btn btn-primary" href="#/">Back home</a>
     </main>`;
@@ -192,14 +193,6 @@ export function Room({ code, profile, config, onProfileChange }) {
   </div>`;
 }
 
-function localTime(tz) {
-  try {
-    return new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', timeZone: tz || undefined }).format(new Date());
-  } catch {
-    return '';
-  }
-}
-
 function TopBar({ session, code, onSettings }) {
   const st = session.state;
   const partnerId = session.partnerId();
@@ -210,7 +203,7 @@ function TopBar({ session, code, onSettings }) {
     session.status === 'online'
       ? online
         ? showBothTimes
-          ? `🕐 ${localTime(partner.tz)} for ${partner.name}`
+          ? `${clockIn(session.me.tz)} here · ${clockIn(partner.tz)} there`
           : 'Connected'
         : partner
           ? `${partner.name} is away`
@@ -219,7 +212,7 @@ function TopBar({ session, code, onSettings }) {
         ? 'Connection problem'
         : 'Connecting…';
   return html`<header class="topbar">
-    <a class="brand-sm" href="#/" aria-label="Home">🌙</a>
+    <a class="brand-sm" href="#/" aria-label="Same Sky home"><${MoonMark} /></a>
     <div class="couple">
       <${Avatar} player=${session.me} size="sm" online=${true} />
       <span class="amp">&</span>
@@ -234,7 +227,7 @@ function TopBar({ session, code, onSettings }) {
     <button class="btn btn-ghost btn-sm code-btn" onClick=${() => copyInvite(code)} title="Copy invite link">
       ${formatCode(code)}
     </button>
-    <button class="btn btn-ghost btn-sm" onClick=${onSettings} aria-label="Settings">⚙️</button>
+    <button class="btn btn-ghost btn-sm btn-icon" onClick=${onSettings} aria-label="Settings"><${Icon} name="settings" /></button>
   </header>`;
 }
 
@@ -251,7 +244,7 @@ async function copyInvite(code) {
   const link = inviteLink(code);
   try {
     await navigator.clipboard.writeText(link);
-    toast('Invite link copied 💌');
+    toast('Invite link copied');
   } catch {
     prompt('Copy this link and send it to your person:', link);
   }
@@ -262,7 +255,7 @@ function Invite({ code, session }) {
   const share = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Same Sky', text: `Come play with me 💞 Room ${formatCode(code)}`, url: link });
+        await navigator.share({ title: 'Same Sky', text: `Come play with me tonight. Room ${formatCode(code)}`, url: link });
         return;
       } catch {
         /* cancelled */
@@ -270,16 +263,23 @@ function Invite({ code, session }) {
     }
     copyInvite(code);
   };
-  return html`<section class="screen narrow stack center invite">
-    <div class="pulse-moon">🌙</div>
-    <h2>Waiting for your person…</h2>
-    <p class="muted">Send them this link. The moment they open it, you'll both be in the same sky.</p>
-    <div class="card stack">
-      <div class="invite-code">${formatCode(code)}</div>
-      <input class="input mono" readOnly value=${link} onFocus=${(e) => e.currentTarget.select()} aria-label="Invite link" />
-      <button class="btn btn-primary btn-lg" onClick=${share}>💌 Share invite link</button>
+  return html`<section class="narrow stack invite">
+    <div class="hero"><${NightScene} label="Your window is lit. Theirs is still dark across the water" /></div>
+    <div class="invite-body">
+      <div>
+        <h2 class="display invite-title">Waiting for your person</h2>
+        <p class="muted">Send them this link. As soon as they open it, you’ll both be in the room.</p>
+      </div>
+      <div class="card stack">
+        <div class="row between wrap gap">
+          <span class="section-label">Room code</span>
+          <span class="invite-code">${formatCode(code)}</span>
+        </div>
+        <input class="input mono" readOnly value=${link} onFocus=${(e) => e.currentTarget.select()} aria-label="Invite link" />
+        <button class="btn btn-primary btn-lg" onClick=${share}><${Icon} name="send" />Share invite link</button>
+      </div>
+      <p class="faint small">Connection: ${session.transport.label}${session.statusDetail ? `, ${session.statusDetail.replace(/…$/, '').toLowerCase()}` : ''}</p>
     </div>
-    <p class="muted small">Connection: ${session.transport.label}${session.statusDetail ? ` — ${session.statusDetail}` : ''}</p>
   </section>`;
 }
 
@@ -303,7 +303,7 @@ function Lobby({ session, config, onRecap }) {
     let opts = {};
     if (useAi && mod.meta.ai?.task) {
       setBusy(mod.meta.id);
-      session.sendFx('loading', { text: `✨ conjuring ${mod.meta.ai.label || 'something new'} for ${mod.meta.title}…` });
+      session.sendFx('loading', { text: `writing ${mod.meta.ai.label || 'something new'} for ${mod.meta.title}…` });
       try {
         const names = playerIds(st).map((id) => st.players[id].name);
         const content = await aiGenerate(config, mod.meta.ai.task, {
@@ -314,8 +314,8 @@ function Lobby({ session, config, onRecap }) {
         });
         opts = { content };
       } catch (err) {
-        if (err instanceof AiError && err.code === 'passcode') toast('AI passcode needed — set it in ⚙️ Settings. Using built-in cards.');
-        else toast(`AI unavailable (${err.message}). Using built-in cards.`);
+        if (err instanceof AiError && err.code === 'passcode') toast('AI passcode needed, add it in Settings. Using the built-in cards.');
+        else toast(`AI unavailable (${err.message}). Using the built-in cards.`);
       } finally {
         setBusy(null);
       }
@@ -328,42 +328,41 @@ function Lobby({ session, config, onRecap }) {
     <div class="lobby-hero">
       <div>
         <h2>Pick a game</h2>
-        <p class="muted">Either of you can choose. ${st.scores.games ? `${st.scores.games} played tonight.` : 'Warm up with In Sync!'}</p>
+        <p>${st.scores.games ? `Either of you can choose. ${st.scores.games} played tonight` : 'Either of you can choose. In Sync is a good first one'}</p>
       </div>
-      <button class="score-pill" onClick=${onRecap} title="Your night so far">
-        <span>💞</span><b>${st.scores.together}</b><small>together pts</small>
+      <button class="score-pill" onClick=${onRecap} title="Our night so far" aria-label=${`${st.scores.together} together points, open our night so far`}>
+        <b>${st.scores.together}</b><small>together points</small>
       </button>
     </div>
     ${differentTz &&
-    html`<div class="lobby-times" aria-label="Your local times">
-      <span class="chip">🕐 ${localTime(session.me.tz)} for you</span>
-      <span class="chip">🌙 ${localTime(partner.tz)} for ${partner.name}</span>
-    </div>`}
+    html`<div class="lobby-times" aria-label="Your local times"><${Postmark} me=${session.me} partner=${partner} /></div>`}
 
-    <div class="vibe-row" role="radiogroup" aria-label="Tonight's vibe">
-      ${VIBES.map(
-        (v) => html`<button key=${v} role="radio" aria-checked=${st.settings.vibe === v}
-          class=${`chip chip-btn ${st.settings.vibe === v ? 'sel' : ''}`}
-          onClick=${() => session.dispatch({ type: 'settings', patch: { vibe: v } })}>${VIBE_LABELS[v]}</button>`,
-      )}
+    <div class="lobby-controls">
+      <div class="vibe-row" role="radiogroup" aria-label="Tonight's vibe">
+        ${VIBES.map(
+          (v) => html`<button key=${v} role="radio" aria-checked=${st.settings.vibe === v}
+            class=${`chip chip-btn ${st.settings.vibe === v ? 'sel' : ''}`}
+            onClick=${() => session.dispatch({ type: 'settings', patch: { vibe: v } })}>${VIBE_LABELS[v]}</button>`,
+        )}
+      </div>
       ${aiReady &&
       html`<button class=${`chip chip-btn ai-chip ${st.settings.ai ? 'sel' : ''}`} role="switch" aria-checked=${st.settings.ai}
         onClick=${() => session.dispatch({ type: 'settings', patch: { ai: !st.settings.ai } })}
-        title="Use Claude to write fresh, personalised prompts">✨ AI ${st.settings.ai ? 'on' : 'off'}</button>`}
+        title="Let Claude write fresh prompts for the two of you"><${Icon} name="wand" size=${16} />AI ${st.settings.ai ? 'on' : 'off'}</button>`}
     </div>
 
     <div class="game-grid">
       ${GAME_LIST.map(
         (mod) => html`<button class="game-card" key=${mod.meta.id} onClick=${() => start(mod)} disabled=${!!busy}
           data-game=${mod.meta.id}>
-          <span class="game-card-emoji">${busy === mod.meta.id ? '✨' : mod.meta.emoji}</span>
+          <span class="game-card-icon">${busy === mod.meta.id ? html`<span class="loader"></span>` : html`<${Icon} name=${iconFor(mod.meta.id)} />`}</span>
           <b>${mod.meta.title}</b>
-          <small>${busy === mod.meta.id ? 'Conjuring…' : mod.meta.tagline}</small>
+          <small>${busy === mod.meta.id ? 'Writing prompts' : String(mod.meta.tagline || '').replace(/\.$/, '')}</small>
         </button>`,
       )}
     </div>
     ${st.history.length > 0 &&
-    html`<div class="center"><button class="btn btn-ghost" onClick=${onRecap}>🌌 Our night so far</button></div>`}
+    html`<div class="lobby-footer"><button class="btn btn-ghost" onClick=${onRecap}><${Icon} name="history" />Our night so far</button></div>`}
   </section>`;
 }
 
@@ -387,7 +386,7 @@ class Boundary extends Component {
   render() {
     if (this.state.error) {
       const exit = this.props.onExit;
-      return html`<div class="card stack center"><h3>Oops, ${this.props.label || 'this'} tripped 🙈</h3>
+      return html`<div class="card stack center"><h3>Something went wrong in ${this.props.label || 'this screen'}</h3>
         <p class="muted small">${String(this.state.error.message || this.state.error)}</p>
         <div class="row gap center wrap">
           ${exit && html`<button class="btn" onClick=${() => { this.setState({ error: null }); exit(); }}>${this.props.exitLabel || 'Close'}</button>`}
@@ -451,11 +450,16 @@ function GameHost({ session, config, kept = null, onLeaveKept }) {
     };
   }, [game.id, game.n]);
 
-  const end = kept ? () => onLeaveKept?.() : () => session.dispatch({ type: 'endGame' });
+  const end = kept
+    ? () => onLeaveKept?.()
+    : () => {
+        hideToast(); // e.g. "Tap ✕ again to leave" shouldn't follow you into the lobby
+        session.dispatch({ type: 'endGame' });
+      };
   if (err) {
     // A failed module download is cached by the browser for this page, so only a reload retries it.
     return html`<div class="card stack center">
-      <h3>Couldn't load this game 📶</h3>
+      <h3>Couldn't load this game</h3>
       <p class="muted small">Your connection may have hiccuped. ${String(err.message || err).slice(0, 120)}</p>
       <div class="row gap center wrap">
         <button class="btn btn-primary" onClick=${() => location.reload()}>Try again</button>
@@ -463,7 +467,7 @@ function GameHost({ session, config, kept = null, onLeaveKept }) {
       </div>
     </div>`;
   }
-  if (!View) return html`<div class="center"><div class="loader">✨</div></div>`;
+  if (!View) return html`<div class="center"><div class="loader" role="status" aria-label="Loading the game"></div></div>`;
 
   const ids = playerIds(st).filter((id) => st.players[id]);
   const partnerId = session.partnerId();
@@ -520,9 +524,9 @@ function ReactionBar({ session }) {
     ${REACTIONS.map((e) => html`<button key=${e} class="react-btn" onClick=${() => send(e)} aria-label=${`Send ${e}`}>${e}</button>`)}
     <button class="react-btn nudge" aria-label="Send a 'thinking of you' heartbeat" onClick=${() => {
       session.sendFx('nudge', {});
-      toast('Heartbeat sent 💗');
+      toast('Heartbeat sent');
       play('heart');
-    }}>💗</button>
+    }}><${Icon} name="heart" size=${20} /></button>
   </nav>`;
 }
 
@@ -556,7 +560,7 @@ function Settings({ session, config, onClose, onProfileChange }) {
 
   return html`<div class="sheet-backdrop" onClick=${(e) => e.target === e.currentTarget && close()}>
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Settings" ref=${sheet} tabIndex="-1">
-      <div class="row between"><h2>Settings</h2><button class="btn btn-ghost btn-sm" onClick=${close} aria-label="Close settings">✕</button></div>
+      <div class="row between"><h2>Settings</h2><button class="btn btn-ghost btn-sm btn-icon" onClick=${close} aria-label="Close settings"><${Icon} name="x" /></button></div>
 
       <label class="field"><span>Your name</span>
         <input class="input" value=${name} maxLength="24" onInput=${(e) => setName(e.currentTarget.value)} /></label>
@@ -572,13 +576,13 @@ function Settings({ session, config, onClose, onProfileChange }) {
 
       ${aiReady
         ? html`<fieldset class="field stack">
-            <legend>✨ AI (Claude)</legend>
+            <legend>AI prompts (Claude)</legend>
             <label class="field"><span>AI passcode <small class="muted">(the APP_PASSCODE you set in Supabase — stays on this device)</small></span>
               <input class="input" type="password" value=${pass} autocomplete="off" onInput=${(e) => setPass(e.currentTarget.value)} /></label>
             <label class="field"><span>About us <small class="muted">(optional — inside jokes, how you met, places you love; helps personalise questions)</small></span>
               <textarea class="input" rows="3" maxLength="500" value=${aboutUs} onInput=${(e) => setAboutUs(e.currentTarget.value)}></textarea></label>
           </fieldset>`
-        : html`<p class="muted small">✨ AI-written prompts are off. See SETUP.md in the repo to switch them on.</p>`}
+        : html`<p class="muted small">AI-written prompts are off. SETUP.md in the repo explains how to switch them on.</p>`}
 
       <div class="row gap wrap">
         <button class=${`btn btn-ghost btn-sm ${resetArmed ? 'armed' : ''}`} onClick=${() =>
@@ -643,18 +647,18 @@ function Recap({ session, config, code, onClose }) {
 
   return html`<div class="sheet-backdrop" onClick=${(e) => e.target === e.currentTarget && onClose()}>
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Our night so far" ref=${sheet} tabIndex="-1">
-      <div class="row between"><h2>🌌 Our night so far</h2><button class="btn btn-ghost btn-sm" onClick=${onClose} aria-label="Close">✕</button></div>
+      <div class="row between"><h2>Our night so far</h2><button class="btn btn-ghost btn-sm btn-icon" onClick=${onClose} aria-label="Close"><${Icon} name="x" /></button></div>
       <div class="score-big"><b>${st.scores.together}</b> together point${st.scores.together === 1 ? '' : 's'} · ${st.scores.games} game${st.scores.games === 1 ? '' : 's'}</div>
       ${st.history.length === 0
-        ? html`<p class="muted">Nothing yet — go play something! 🎲</p>`
+        ? html`<p class="muted">Nothing played yet. Pick a game and it shows up here.</p>`
         : html`<ul class="history">${st.history
             .slice()
             .reverse()
-            .map((h, i) => html`<li key=${i}><span>${h.emoji}</span><div><b>${h.title}</b> <small class="muted">+${h.points}</small><br /><small>${h.summary}</small></div></li>`)}</ul>`}
+            .map((h, i) => html`<li key=${i}><span><${Icon} name=${iconFor(h.id)} /></span><div class="grow"><div class="row between gap"><b>${h.title}</b><span class="pts">+${h.points}</span></div><small class="muted">${h.summary}</small></div></li>`)}</ul>`}
       ${poem?.poem &&
       html`<div class="poem card"><h3>${poem.title}</h3>${poem.poem.split('\n').map((l, i) => html`<p key=${i}>${l}</p>`)}</div>`}
       ${aiOn && st.history.length > 0 &&
-      html`<button class="btn btn-primary" onClick=${write} disabled=${busy}>${busy ? 'Writing…' : poem ? '✨ Write a new one' : '✨ Write us a little poem about tonight'}</button>`}
+      html`<button class="btn btn-primary" onClick=${write} disabled=${busy}>${busy ? 'Writing…' : poem ? 'Write a new one' : 'Write us a short poem about tonight'}</button>`}
     </div>
   </div>`;
 }

@@ -1,7 +1,34 @@
 // Shared UI building blocks for game views. Games should use these so every screen feels the same.
 import { html, useEffect, useState, useRef } from './h.js';
+import { Icon } from './icons.js';
+import { iconFor } from '../games/index.js';
 
-const safeColor = (c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '#ff7eb6');
+export { Icon };
+
+const safeColor = (c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : '#f2b35c');
+
+/** "9:40 pm" in a time zone (lower-case, the postmark style). */
+export function clockIn(tz, at = Date.now()) {
+  try {
+    return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz || undefined })
+      .format(new Date(at))
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Same Sky's signature: both local times written like a postmark, "9:40 pm here · 11:40 am there".
+ * Use it in the top bar and on results/keepsakes (pass `at` to stamp a moment in the past).
+ */
+export function Postmark({ me, partner, at, class: cls = '' }) {
+  const here = clockIn(me?.tz, at);
+  if (!here) return null;
+  const differs = partner?.tz && partner.tz !== me?.tz;
+  return html`<span class=${`postmark ${cls}`}>${differs ? `${here} here · ${clockIn(partner.tz, at)} there` : `${here} for you both`}</span>`;
+}
 
 export function Avatar({ player, size = 'md', online }) {
   if (!player) return html`<span class="avatar avatar-${size} avatar-empty">?</span>`;
@@ -10,15 +37,15 @@ export function Avatar({ player, size = 'md', online }) {
   </span>`;
 }
 
-/** Title bar inside a game: emoji + title + optional round info + leave button. */
+/** Title bar inside a game: line icon + title + optional round info + leave button. */
 export function GameHeader({ meta, round, total, api, children }) {
   return html`<div class="game-header">
-    <div class="game-title"><span class="game-emoji">${meta.emoji}</span> ${meta.title}</div>
+    <div class="game-title"><span class="game-icon"><${Icon} name=${iconFor(meta.id)} /></span>${meta.title}</div>
     <div class="game-meta">
       ${round != null && html`<span class="chip"><span class="hide-narrow">Round </span>${round}${total ? ` / ${total}` : ''}</span>`}
       ${children}
-      <button class=${`btn btn-ghost btn-sm ${api.leaveArmed ? 'armed' : ''}`} onClick=${() => api.confirmEnd()}
-        aria-label=${api.leaveArmed ? 'Tap again to leave this game' : 'Leave this game'}>${api.leaveArmed ? 'Leave?' : '✕'}</button>
+      <button class=${`btn btn-ghost btn-sm ${api.leaveArmed ? 'armed' : 'btn-icon'}`} onClick=${() => api.confirmEnd()}
+        aria-label=${api.leaveArmed ? 'Tap again to leave this game' : 'Leave this game'}>${api.leaveArmed ? 'Leave' : html`<${Icon} name="x" />`}</button>
     </div>
   </div>`;
 }
@@ -32,7 +59,7 @@ export function LockStatus({ api, locked, labels = {} }) {
       (p) => p && html`<span class=${`lock ${locked[p.id] ? 'is-locked' : ''}`} key=${p.id}>
         <${Avatar} player=${p} size="sm" />
         <b>${p.id === api.me.id ? 'You' : p.name}</b>
-        <span>${locked[p.id] ? `✓ ${done}` : waiting}</span>
+        <span>${locked[p.id] ? html`<${Icon} name="check" size=${14} /> ${done}` : waiting}</span>
       </span>`,
     )}
   </div>`;

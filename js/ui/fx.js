@@ -18,7 +18,10 @@ function spawn(cls, text, style, life) {
   const el = document.createElement('span');
   el.className = cls;
   el.textContent = text;
-  Object.assign(el.style, style);
+  for (const [k, v] of Object.entries(style)) {
+    if (k.startsWith('--')) el.style.setProperty(k, v); // custom properties need setProperty
+    else el.style[k] = v;
+  }
   layer().appendChild(el);
   setTimeout(() => el.remove(), life);
   return el;
@@ -40,18 +43,22 @@ export function floatEmoji(emoji, { count = 1, fromPartner = false } = {}) {
   }
 }
 
-const CONFETTI = ['💖', '✨', '💫', '🌟', '💕', '🎉', '⭐'];
-export function confetti({ emojis = CONFETTI, count = 28 } = {}) {
+// Celebration: a handful of paper slips in the scene's colours (moonlight paper and lamplight).
+const SLIPS = ['#f1e9da', '#f2b35c', '#e6dcc8', '#a3a9b8'];
+export function confetti({ count = 22 } = {}) {
   if (reduced()) count = 6;
   for (let i = 0; i < count; i++) {
-    const dur = 1600 + Math.random() * 1400;
-    spawn('fx-confetti', emojis[i % emojis.length], {
+    const dur = 1800 + Math.random() * 1400;
+    const w = 6 + Math.random() * 4;
+    spawn('fx-confetti', '', {
       left: `${Math.random() * 100}vw`,
-      fontSize: `${16 + Math.random() * 20}px`,
+      '--c': SLIPS[i % SLIPS.length],
+      '--w': `${w}px`,
+      '--h': `${w * (1.3 + Math.random() * 0.6)}px`,
       animationDuration: `${dur}ms`,
       animationDelay: `${Math.random() * 300}ms`,
-      '--spin': `${(Math.random() - 0.5) * 720}deg`,
-      '--drift': `${(Math.random() - 0.5) * 160}px`,
+      '--spin': `${(Math.random() - 0.5) * 540}deg`,
+      '--drift': `${(Math.random() - 0.5) * 140}px`,
     }, dur + 400);
   }
 }
@@ -72,6 +79,10 @@ export function heartPulse(label = '') {
 }
 
 let toastTimer = null;
+export function hideToast() {
+  clearTimeout(toastTimer);
+  document.getElementById('toast')?.classList.remove('show');
+}
 export function toast(message, { ms = 2600 } = {}) {
   let el = document.getElementById('toast');
   if (!el) {

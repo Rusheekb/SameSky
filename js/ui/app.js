@@ -3,7 +3,8 @@ import { html, useEffect, useState } from './h.js';
 import { storage } from '../lib/storage.js';
 import { randomCode, normalizeRoomCode, isValidRoomCode, formatCode } from '../lib/util.js';
 import { Room } from './room.js';
-import { Avatar } from './components.js';
+import { Avatar, Icon } from './components.js';
+import { NightScene, MoonMark } from './scene.js';
 import { AVATARS, COLORS, getClientId } from './profile.js';
 
 
@@ -55,8 +56,11 @@ export function ProfileSetup({ initial, onSave, onCancel, inviteCode }) {
     if (name.trim()) onSave({ name: name.trim().slice(0, 24), avatar, color });
   };
   return html`<main class="screen narrow">
-    <div class="brand"><span class="brand-moon">🌙</span><h1>Same Sky</h1></div>
-    ${inviteCode && !initial && html`<p class="lede">You've been invited to room <b>${formatCode(inviteCode)}</b> 💌<br />First, who are you?</p>`}
+    <div class="brand"><${MoonMark} /><span class="brand-name">Same Sky</span></div>
+    <h1 class="display profile-title">${inviteCode && !initial ? 'You’re invited' : initial ? 'Your profile' : 'Who’s playing'}</h1>
+    ${inviteCode && !initial
+      ? html`<p class="lede">Room <span class="mono">${formatCode(inviteCode)}</span> is waiting for you. First, how should your person see you?</p>`
+      : html`<p class="lede">Your name and avatar are what your person sees during the games.</p>`}
     <form class="card stack" onSubmit=${submit}>
       <label class="field"><span>Your name</span>
         <input class="input" value=${name} maxLength="24" placeholder="e.g. Maya" autoFocus
@@ -84,7 +88,7 @@ export function ProfileSetup({ initial, onSave, onCancel, inviteCode }) {
       </div>
       <div class="row gap end">
         ${onCancel && html`<button type="button" class="btn btn-ghost" onClick=${onCancel}>Cancel</button>`}
-        <button class="btn btn-primary" type="submit" disabled=${!name.trim()}>${inviteCode && !initial ? 'Join room →' : 'Save'}</button>
+        <button class="btn btn-primary" type="submit" disabled=${!name.trim()}>${inviteCode && !initial ? html`Join room <${Icon} name="arrow-right" />` : 'Save'}</button>
       </div>
     </form>
   </main>`;
@@ -113,39 +117,49 @@ function Home({ profile, onEditProfile }) {
     e.preventDefault();
     if (isValidRoomCode(parsed)) location.hash = `#/r/${parsed}`;
   };
-  return html`<main class="screen narrow">
-    <div class="brand"><span class="brand-moon">🌙</span><h1>Same Sky</h1></div>
-    <p class="lede">Game night for two hearts, miles apart.<br />Real-time mini-games made for long-distance love.</p>
-
-    <div class="card stack">
-      <div class="row between">
-        <div class="row gap"><${Avatar} player=${profile} /> <span>Hi, <b>${profile.name}</b></span></div>
-        <button class="btn btn-ghost btn-sm" onClick=${onEditProfile}>Edit</button>
+  return html`<main class="home">
+    <section class="hero">
+      <${NightScene} />
+      <div class="hero-copy">
+        <div class="brand"><${MoonMark} /><span class="brand-name">Same Sky</span></div>
+        <h1 class="hero-title">Game night for the two of you, miles apart</h1>
       </div>
-      <button class="btn btn-primary btn-lg" onClick=${create}>✨ Create our room</button>
-      <form class="row gap" onSubmit=${join}>
-        <input class="input grow" value=${code} placeholder="Code or invite link" aria-label="Room code or invite link"
-          maxLength="300" onInput=${(e) => setCode(e.currentTarget.value)} />
-        <button class="btn" type="submit" disabled=${!isValidRoomCode(parsed)}>Join</button>
-      </form>
-      ${looksLikeLink && html`<p class="form-error">That link has no room in it — paste just the code, or open the invite link itself.</p>`}
-    </div>
+    </section>
 
-    ${recent.length > 0 &&
-    html`<div class="card stack">
-      <h3>Jump back in</h3>
-      ${recent.map(
-        (r) => html`<a class="recent" href=${`#/r/${r.code}`} key=${r.code}>
-          <b>${formatCode(r.code)}</b>
-          <span class="muted">${r.partner ? `with ${r.partner}` : ''}</span>
-        </a>`,
-      )}
-    </div>`}
+    <div class="home-body">
+      <p class="hero-sub">Seven small games you play live on both phones while you talk. Make a room, send your person the link, pick a game.</p>
 
-    <div class="how muted">
-      <p><b>How it works:</b> create a room, send your person the link, and pick a game together.
-      Everything happens live on both screens — keep a call going while you play. 💞</p>
-      <p>Tip: use a memorable custom code (like <code>OURSKY</code>) and you'll always meet in the same room.</p>
+      <div class="card stack">
+        <div class="row between">
+          <div class="row gap"><${Avatar} player=${profile} /><span class="muted">Playing as <b class="text">${profile.name}</b></span></div>
+          <button class="btn btn-ghost btn-sm" onClick=${onEditProfile}>Edit</button>
+        </div>
+        <button class="btn btn-primary btn-lg" onClick=${create}>Create our room</button>
+        <form class="row gap" onSubmit=${join}>
+          <input class="input grow" value=${code} placeholder="Code or invite link" aria-label="Room code or invite link"
+            maxLength="300" onInput=${(e) => setCode(e.currentTarget.value)} />
+          <button class="btn" type="submit" disabled=${!isValidRoomCode(parsed)}>Join</button>
+        </form>
+        ${looksLikeLink && html`<p class="form-error">That link has no room in it. Paste just the code, or open the invite link itself.</p>`}
+      </div>
+
+      ${recent.length > 0 &&
+      html`<div class="card">
+        <p class="section-label">Your rooms</p>
+        <div class="recent-list">
+          ${recent.map(
+            (r) => html`<a class="recent" href=${`#/r/${r.code}`} key=${r.code}>
+              <b>${formatCode(r.code)}</b>
+              <span class="muted small">${r.partner ? `with ${r.partner}` : ''}</span>
+            </a>`,
+          )}
+        </div>
+      </div>`}
+
+      <div class="how">
+        <p>Everything happens live on both screens, so keep a call going while you play.</p>
+        <p>Use a custom code like <code>OURSKY</code> and you’ll always meet in the same room.</p>
+      </div>
     </div>
   </main>`;
 }

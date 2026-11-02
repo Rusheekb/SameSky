@@ -210,7 +210,7 @@ export function finishGame(state, ctx, by = null) {
   const entry = {
     id: state.game.id,
     title: mod?.meta.title || state.game.id,
-    emoji: mod?.meta.emoji || '🎲',
+    emoji: mod?.meta.emoji || '',
     summary,
     highlights: raw.slice(0, 6).map((h) => cleanText(h, 200)).filter(Boolean),
     points,

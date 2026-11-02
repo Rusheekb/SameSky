@@ -3,7 +3,8 @@ import { storage } from '../lib/storage.js';
 import { uid } from '../lib/util.js';
 
 export const AVATARS = ['🌙', '☀️', '⭐', '🌸', '🌻', '🐻', '🐱', '🦊', '🐼', '🐧', '🦋', '🐢', '🍓', '🍑', '🧸', '👑', '🌈', '🔥', '🍀', '🎧'];
-export const COLORS = ['#ff7eb6', '#ffb86b', '#ffe66d', '#7ef0c4', '#6ec8ff', '#b69cff'];
+// Player colours: muted enough to sit on the ink surfaces, distinct enough to tell two people apart.
+export const COLORS = ['#f2b35c', '#ef8a74', '#e3cf8f', '#7fc8a9', '#7fa8e6', '#c3a3e6'];
 
 /** Stable random id for this device (per ?profile= slot). */
 export function getClientId() {
